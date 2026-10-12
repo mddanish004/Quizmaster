@@ -50,9 +50,26 @@ RUN --mount=type=cache,target=/root/.npm npm ci
 COPY frontend/ .
 RUN npm run build
 
-FROM caddy:2-alpine
+# Caddy is self-built (S5-9): upstream images still ship the flagged Go
+# toolchain, so we compile v2.11.7 from pinned source with Go 1.27.2 and an
+# explicit golang.org/x/net floor. Trivy re-verifies every release.
+FROM golang:1.27.2-alpine AS caddy-build
+WORKDIR /src
+RUN apk add --no-cache git ca-certificates
+RUN git clone --depth 1 --branch v2.11.7 https://github.com/caddyserver/caddy.git .
+RUN go get golang.org/x/net@v0.60.0
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/caddy ./cmd/caddy
+
+FROM alpine:3.23
+RUN apk add --no-cache ca-certificates mailcap
+COPY --from=caddy-build /out/caddy /usr/bin/caddy
 COPY deploy/caddy/Caddyfile /etc/caddy/Caddyfile
 COPY --from=web-build /app/dist /srv
+ENV XDG_CONFIG_HOME=/config XDG_DATA_HOME=/data
+WORKDIR /srv
+EXPOSE 80 443
+ENTRYPOINT ["caddy"]
+CMD ["run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
 ```
 
 Pin base image digests in production after setup; Dependabot updates them. No secrets or runtime API URL are built into frontend except public same-origin configuration.
