@@ -7,11 +7,14 @@ project     = "quizforge"
 instance_type = "t4g.small"
 ebs_size_gb   = 20
 
-# DNS: leave domain_name empty until the parent domain + zone exist.
+# DNS: mddanish.dev is managed EXTERNALLY (no Route 53 zone) → leave empty and
+# create the A record manually after apply (host quizzy → Elastic IP output).
 domain_name = ""
-subdomain   = "staging"
+subdomain   = "quizzy"
 
 github_repo = "mddanish004/Quizmaster"
+github_owner_id = "133763727"   # from decoded OIDC sub; immutable
+github_repo_id  = "1415490116"  # from decoded OIDC sub; immutable
 alert_email = "m.danishansari004@gmail.com"
 
 budget_limit_usd      = "30"

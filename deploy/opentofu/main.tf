@@ -10,6 +10,13 @@ provider "aws" {
 locals {
   name_prefix = "${var.project}-${var.environment}"
   app_fqdn    = var.domain_name != "" ? "${var.subdomain}.${var.domain_name}" : ""
+  # OIDC subject forms: GitHub issues sub with immutable numeric IDs
+  # (repo:ORG@OWNER_ID/REPO@REPO_ID:...); the legacy readable form is kept as
+  # fallback in case GitHub ever reverts the claim format.
+  repo_owner   = split("/", var.github_repo)[0]
+  repo_name    = split("/", var.github_repo)[1]
+  repo_sub_new = "repo:${local.repo_owner}@${var.github_owner_id}/${local.repo_name}@${var.github_repo_id}"
+  repo_sub_old = "repo:${var.github_repo}"
   common_tags = merge({
     Project     = "QuizForge"
     Environment = var.environment
@@ -238,15 +245,19 @@ resource "aws_iam_role" "deploy" {
     Statement = [{
       Effect    = "Allow"
       Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
-      Action    = "sts:AssumeRoleWithWebIdentity"
+      # TagSession permits the session tagging configure-aws-credentials does
+      # by default (repo attribution in CloudTrail); S5-7.
+      Action = ["sts:AssumeRoleWithWebIdentity", "sts:TagSession"]
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
         }
         StringLike = {
           "token.actions.githubusercontent.com:sub" = [
-            "repo:${var.github_repo}:environment:production",
-            "repo:${var.github_repo}:ref:refs/tags/v*",
+            "${local.repo_sub_new}:environment:production",
+            "${local.repo_sub_new}:ref:refs/tags/v*",
+            "${local.repo_sub_old}:environment:production",
+            "${local.repo_sub_old}:ref:refs/tags/v*",
           ]
         }
       }

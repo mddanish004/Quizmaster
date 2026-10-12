@@ -59,6 +59,18 @@ variable "github_repo" {
   default     = "mddanish004/Quizmaster"
 }
 
+variable "github_owner_id" {
+  description = "Immutable numeric GitHub owner ID (GitHub now issues OIDC sub claims as ORG@OWNER_ID/REPO@REPO_ID; read it from any decoded token)."
+  type        = string
+  default     = "133763727"
+}
+
+variable "github_repo_id" {
+  description = "Immutable numeric GitHub repository ID (see github_owner_id)."
+  type        = string
+  default     = "1415490116"
+}
+
 variable "alert_email" {
   description = "Email receiving budget + CloudWatch alarm notifications (confirm SNS subscription)."
   type        = string
