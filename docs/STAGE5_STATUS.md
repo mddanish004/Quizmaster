@@ -231,6 +231,7 @@ the known shared-DB flake — env issue, not code) · secret scan clean.
 | S5-11 | High (plan drift) | First `policy.plan` proposed destroying the live instance: the dynamic AMI lookup re-resolved to a newer upstream image, forcing host replacement (+ EIP re-assoc + alarm churn). Caught at plan review; plan discarded unapplied. | `lifecycle { ignore_changes = [ami] }` — AMI rotation becomes an explicit `taint + apply`, never silent drift. Re-plan must show 1 change only. |
 | S5-12 | High (first deploy impossible) | Nothing ever created `/opt/quizforge/.env` or placed `compose.prod.yaml`/`deploy.sh` on the host (repo is never cloned there) — the "successful" `v0.1.9` deploy died at preflight. | `deploy.sh` step 0 materializes `.env` (0600, `printf %s` — substitution-safe) from SSM + derived URLs, fetches pinned `compose.prod.yaml` by commit SHA; workflow fetches pinned `deploy.sh` the same way. |
 | S5-13 | High (silent deploy) | Workflow never polled the SSM invocation — dispatch success masked remote failure, so `v0.1.9` looked green while nothing ran. | New wait-step polls to terminal status, tails output, fails the job on remote error (20 min cap). |
+| S5-14 | Medium (SSM quoting) | First gated run caught a real error fast: over-escaped `&&` in the SSM command array broke `cd` on the host. | Dropped shell chaining entirely — `deploy.sh` defaults to `/opt/quizforge`, so the command is a single env-prefixed invocation. No `&&`/`cd` in SSM arrays ever again. |
 
 ### Gate B readiness
 
