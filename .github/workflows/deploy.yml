@@ -87,7 +87,7 @@ jobs:
           CMD_ID=$(aws ssm send-command \
             --instance-ids "${{ secrets.PROD_INSTANCE_ID }}" \
             --document-name AWS-RunShellScript \
-            --parameters commands=["mkdir -p /opt/quizforge","curl -fsSL https://raw.githubusercontent.com/$REPO/$REF/deploy/scripts/deploy.sh -o /opt/quizforge/deploy.sh","chmod +x /opt/quizforge/deploy.sh","ECR_REGISTRY=${{ secrets.ECR_REGISTRY }} COMPOSE_REF=$REF /opt/quizforge/deploy.sh ${{ needs.build-push.outputs.api_digest }} ${{ needs.build-push.outputs.web_digest }}"] \
+            --parameters commands=["mkdir -p /opt/quizforge","curl -fsSL https://raw.githubusercontent.com/$REPO/$REF/deploy/scripts/deploy.sh -o /opt/quizforge/deploy.sh","chmod +x /opt/quizforge/deploy.sh","ECR_REGISTRY=${{ secrets.ECR_REGISTRY }} COMPOSE_REF=$REF /opt/quizforge/deploy.sh ${{ needs.build-push.outputs.api_digest }} ${{ needs.build-push.outputs.web_digest }} ${{ needs.build-push.outputs.migrate_digest }}"] \
             --query 'Command.CommandId' --output text)
           echo "command-id=$CMD_ID" >> "$GITHUB_OUTPUT"
       - name: Wait for SSM deploy result (fail on remote error)

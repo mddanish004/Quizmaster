@@ -232,6 +232,7 @@ the known shared-DB flake — env issue, not code) · secret scan clean.
 | S5-12 | High (first deploy impossible) | Nothing ever created `/opt/quizforge/.env` or placed `compose.prod.yaml`/`deploy.sh` on the host (repo is never cloned there) — the "successful" `v0.1.9` deploy died at preflight. | `deploy.sh` step 0 materializes `.env` (0600, `printf %s` — substitution-safe) from SSM + derived URLs, fetches pinned `compose.prod.yaml` by commit SHA; workflow fetches pinned `deploy.sh` the same way. |
 | S5-13 | High (silent deploy) | Workflow never polled the SSM invocation — dispatch success masked remote failure, so `v0.1.9` looked green while nothing ran. | New wait-step polls to terminal status, tails output, fails the job on remote error (20 min cap). |
 | S5-14 | Medium (SSM quoting) | First gated run caught a real error fast: over-escaped `&&` in the SSM command array broke `cd` on the host. | Dropped shell chaining entirely — `deploy.sh` defaults to `/opt/quizforge`, so the command is a single env-prefixed invocation. No `&&`/`cd` in SSM arrays ever again. |
+| S5-15 | Medium (migrate tag) | `deploy.sh` pulled `quizforge-migrate:latest`, which CI never pushes (SHA tags only) — migrate step failed after env/ECR succeeded. | Migrate digest plumbed end-to-end (build output → SSM arg → `image@digest`), same as api/web. |
 
 ### Gate B readiness
 

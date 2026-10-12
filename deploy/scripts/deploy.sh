@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Production deploy driver (runs on the EC2 host via SSM Run Command).
-# Usage: deploy.sh <api-digest> <web-digest>
+# Usage: deploy.sh <api-digest> <web-digest> <migrate-digest>
 # Env required: ECR_REGISTRY, MIGRATIONS_DATABASE_URL (direct Neon URL, from the
 #   root-owned 0600 .env), DEPLOY_DIR. AWS_REGION defaults to ap-southeast-1.
 set -euo pipefail
 
 API_DIGEST="${1:?api digest required}"
 WEB_DIGEST="${2:?web digest required}"
+MIGRATE_DIGEST="${3:?migrate digest required}"
 DEPLOY_DIR="${DEPLOY_DIR:-/opt/quizforge}"
 ENV_FILE="$DEPLOY_DIR/.env"
 DEPLOY_ENV="$DEPLOY_DIR/deploy.env"
@@ -98,7 +99,7 @@ echo "[migrate] running backward-compatible migrations"
 # shellcheck disable=SC1090
 set -a; . "$ENV_FILE"; set +a # host needs MIGRATIONS_DATABASE_URL (0600, root-only, never echoed)
 docker run --rm \
-  "${ECR_REGISTRY}/quizforge-migrate:${MIGRATE_TAG:-latest}" \
+  "${ECR_REGISTRY}/quizforge-migrate@${MIGRATE_DIGEST}" \
   -path /migrations -database "${MIGRATIONS_DATABASE_URL:?}" up
 
 echo "[deploy] pulling + recreating services"
