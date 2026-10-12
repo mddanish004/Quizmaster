@@ -25,6 +25,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.DEPLOY_ROLE_ARN }}
           aws-region: ap-southeast-1
+          role-skip-session-tagging: true # trust allows AssumeRole only; see S5-7
       - uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2 (verified)
         id: ecr
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3 (verified)
@@ -79,6 +80,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.DEPLOY_ROLE_ARN }}
           aws-region: ap-southeast-1
+          role-skip-session-tagging: true # trust allows AssumeRole only; see S5-7
       - name: Deploy via SSM (migrate + switch + smoke)
         run: |
           aws ssm send-command \
