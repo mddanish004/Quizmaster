@@ -354,6 +354,13 @@ resource "aws_instance" "app" {
   # Caddy reissues certs). Surprising but reproducible; review the plan diff.
   user_data_replace_on_change = true
 
+  # The AMI lookup is dynamic: Amazon publishes new AL2023 images regularly and
+  # every refresh would otherwise propose host replacement (S5-11). AMI rotation
+  # is an explicit operator action (taint + apply), never plan drift.
+  lifecycle {
+    ignore_changes = [ami]
+  }
+
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-app" })
 }
 
