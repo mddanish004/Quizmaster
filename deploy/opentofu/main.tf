@@ -297,15 +297,15 @@ resource "aws_iam_role_policy" "deploy" {
         ]
       },
       {
-        Sid      = "SsmDeploy"
-        Effect   = "Allow"
-        Action   = ["ssm:SendCommand"]
-        Resource = [aws_instance.app.arn]
-        Condition = {
-          StringEquals = {
-            "ssm:DocumentName" = "AWS-RunShellScript"
-          }
-        }
+        Sid    = "SsmDeploy"
+        Effect = "Allow"
+        Action = ["ssm:SendCommand"]
+        # SendCommand authorizes against BOTH the target instance AND the
+        # document (S5-10); AWS-owned documents live under an empty account.
+        Resource = [
+          aws_instance.app.arn,
+          "arn:aws:ssm:${var.region}::document/AWS-RunShellScript",
+        ]
       },
       {
         Sid      = "SsmResults"
