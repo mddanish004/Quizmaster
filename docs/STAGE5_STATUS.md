@@ -225,6 +225,7 @@ the known shared-DB flake — env issue, not code) · secret scan clean.
 | S5-5 | Medium (auto-deploy) | `deploy.yml` deployed on every `main` push (environment gate only). | Trigger is now release tags `v*` + manual dispatch. |
 | S5-6 | High (CI broken) | Four hallucinated action SHAs (aws-*/docker-*) + nonexistent trivy tag `0.32.0` + truncated setup-go SHA — every `deploy` run failed at action download. Found by verifying each pin against the GitHub API. | Verified SHAs/tags: configure-aws-credentials `ff71707`, ecr-login `03f1aad`, setup-buildx `8d2750c`, build-push `10e90e3`, trivy `v0.36.0`, setup-go `40f1582`; YAML re-parsed OK. Cut `v0.1.1` after push (never move `v0.1.0`). |
 | S5-7 | High (OIDC denied) | Real cause (proven by decoding the live token): GitHub now issues `sub` with immutable numeric IDs — `repo:mddanish004@133763727/Quizmaster@1415490116:ref:…` — while the trust matched only the legacy readable form. Two red herrings eliminated along the way (session tagging, secret value). | TF: trust matches both subject forms + allows `sts:TagSession`; workflow debug step removed and tagging-skip dropped. Needs one targeted `apply` (IAM role trust only) + `v0.1.6`. |
+| S5-8 | Medium (Trivy blind) | Images built ARM64-only; Trivy on the amd64 runner failed with "no child with platform linux/amd64 in index". | Multi-arch builds (`linux/amd64,linux/arm64`): digest is the manifest list, instance pulls arm64, Trivy pulls amd64. Bonus: local amd64 testing possible. Ship in `v0.1.7`. |
 
 ### Gate B readiness
 
