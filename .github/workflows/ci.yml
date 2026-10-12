@@ -1,0 +1,51 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: quizforge
+          POSTGRES_PASSWORD: quizforge
+          POSTGRES_DB: quizforge_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U quizforge"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.27.2" }
+      - run: test ! -s <(gofmt -l backend) || (gofmt -l backend && exit 1)
+      - run: cd backend && go vet ./...
+      - name: Create per-package test databases
+        run: |
+          PGPASSWORD=quizforge psql -h localhost -U quizforge -d quizforge_test -c "CREATE DATABASE quizforge_test_quiz;" -c "CREATE DATABASE quizforge_test_ai;" -c "CREATE DATABASE quizforge_test_live;" -c "CREATE DATABASE quizforge_test_janitor;"
+      - run: cd backend && go test ./...
+        env:
+          TEST_DATABASE_URL: postgres://quizforge:quizforge@localhost:5432/quizforge_test?sslmode=disable
+          TEST_DATABASE_URL_QUIZ: postgres://quizforge:quizforge@localhost:5432/quizforge_test_quiz?sslmode=disable
+          TEST_DATABASE_URL_AI: postgres://quizforge:quizforge@localhost:5432/quizforge_test_ai?sslmode=disable
+          TEST_DATABASE_URL_LIVE: postgres://quizforge:quizforge@localhost:5432/quizforge_test_live?sslmode=disable
+          TEST_DATABASE_URL_JANITOR: postgres://quizforge:quizforge@localhost:5432/quizforge_test_janitor?sslmode=disable
+      - run: cd backend && go test -race ./internal/live/ ./internal/auth/
+        env:
+          TEST_DATABASE_URL: postgres://quizforge:quizforge@localhost:5432/quizforge_test?sslmode=disable
+          TEST_DATABASE_URL_LIVE: postgres://quizforge:quizforge@localhost:5432/quizforge_test_live?sslmode=disable
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "24" }
+      - run: cd frontend && npm ci && npm run typecheck && npm run test -- --run && npm run build
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/openapi_check.py docs/openapi.yaml
+      - run: docker compose config

@@ -1,0 +1,34 @@
+name: security
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 3 * * 1"
+permissions: { contents: read }
+jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-go@d35c59abb061a4a6abb071d0bb5dfcf19836bc9 # v5
+        with: { go-version: "1.27.2" }
+      - run: cd backend && go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+  npm-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1fff9d5864981f9b # v4
+        with: { node-version: "24" }
+      - run: cd frontend && npm ci && npm audit --audit-level=high
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+  openapi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - run: python3 scripts/openapi_check.py docs/openapi.yaml

@@ -1,0 +1,6 @@
+# Migration image: pinned golang-migrate CLI + reviewed SQL.
+# Run on the host with the DIRECT Neon URL (never the pooler); the API image
+# never auto-migrates on startup.
+FROM migrate/migrate:v4.18.3
+COPY database/migrations /migrations
+ENTRYPOINT ["migrate"]

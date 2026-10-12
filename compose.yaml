@@ -1,0 +1,41 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: .env
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "/quizforge", "healthcheck", "--url=http://127.0.0.1:8080/health/live"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks: [app]
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    depends_on:
+      api: { condition: service_healthy }
+    ports: ["80:80", "443:443"]
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    networks: [app]
+
+networks:
+  app: {}
+volumes:
+  caddy_data: {}
+  caddy_config: {}

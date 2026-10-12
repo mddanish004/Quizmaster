@@ -1,0 +1,11 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "backend/db/queries"
+    schema: "database/migrations"
+    gen:
+      go:
+        package: "db"
+        out: "backend/internal/platform/db"
+        emit_json_tags: true
+        emit_exact_table_names: true

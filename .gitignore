@@ -1,0 +1,14 @@
+.env
+node_modules/
+dist/
+backend/internal/platform/db/
+*.log
+coverage/
+playwright-report/
+test-results/
+.docker/
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+*.tfvars.json

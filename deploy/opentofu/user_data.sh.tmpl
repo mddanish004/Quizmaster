@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# QuizForge EC2 bootstrap (cloud-init user-data, AL2023 ARM64).
+# Idempotent: safe to re-run via SSM if a step is interrupted.
+# Contains NO secrets — only region/env/log routing (rendered by OpenTofu).
+set -euo pipefail
+exec >>/var/log/quizforge-bootstrap.log 2>&1
+
+REGION="${region}"
+ENVIRONMENT="${environment}"
+LOG_GROUP="${log_group}"
+COMPOSE_VER="${compose_ver}"
+
+echo "[bootstrap] region=$REGION env=$ENVIRONMENT"
+
+if ! systemctl is-active --quiet amazon-ssm-agent 2>/dev/null; then
+  echo "[bootstrap] enabling SSM agent"
+  dnf install -y amazon-ssm-agent || true
+  systemctl enable --now amazon-ssm-agent || true
+fi
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "[bootstrap] installing docker"
+  dnf install -y docker
+fi
+systemctl enable --now docker
+
+PLUGIN_DIR=/usr/libexec/docker/cli-plugins
+if [ ! -x "$PLUGIN_DIR/docker-compose" ]; then
+  echo "[bootstrap] installing compose plugin v$COMPOSE_VER (ARM64, pinned)"
+  mkdir -p "$PLUGIN_DIR"
+  curl -fsSL --max-time 120 \
+    "https://github.com/docker/compose/releases/download/v$COMPOSE_VER/docker-compose-linux-aarch64" \
+    -o "$PLUGIN_DIR/docker-compose"
+  chmod +x "$PLUGIN_DIR/docker-compose"
+fi
+docker compose version
+
+mkdir -p /opt/quizforge
+chmod 0755 /opt/quizforge
+
+# Default container log driver: CloudWatch (non-blocking so a logging outage
+# can never wedge the app). Per-service groups override this in compose.prod.yaml.
+if [ ! -f /etc/docker/daemon.json ]; then
+  echo "[bootstrap] configuring docker awslogs default"
+  mkdir -p /etc/docker
+  cat >/etc/docker/daemon.json <<EOF
+{
+  "log-driver": "awslogs",
+  "log-opts": {
+    "awslogs-region": "$REGION",
+    "awslogs-group": "$LOG_GROUP",
+    "awslogs-create-group": "false",
+    "mode": "non-blocking",
+    "max-buffer-size": "4m"
+  }
+}
+EOF
+  systemctl restart docker
+fi
+
+echo "[bootstrap] complete — instance ready for SSM deploy"

@@ -1,0 +1,1011 @@
+openapi: 3.1.0
+info:
+  title: QuizForge AI API
+  version: 0.1.0
+  description: >-
+    Contract baseline for the QuizForge modular monolith. WebSocket messages are
+    specified in REALTIME_DESIGN.md. Participant-facing schemas never include
+    answer correctness before the persisted reveal state.
+servers:
+  - url: /api/v1
+security:
+  - creatorSession: []
+tags:
+  - name: Auth
+  - name: Quizzes
+  - name: AI
+  - name: Live
+  - name: History
+  - name: Operations
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      security: []
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RegisterRequest'}
+      responses:
+        '201': {$ref: '#/components/responses/AuthSuccess'}
+        '400': {$ref: '#/components/responses/ValidationError'}
+        '409': {$ref: '#/components/responses/ConflictError'}
+        '429': {$ref: '#/components/responses/RateLimitError'}
+  /auth/login:
+    post:
+      tags: [Auth]
+      security: []
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LoginRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/AuthSuccess'}
+        '400': {$ref: '#/components/responses/ValidationError'}
+        '401': {$ref: '#/components/responses/AuthError'}
+        '429': {$ref: '#/components/responses/RateLimitError'}
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      parameters: [{$ref: '#/components/parameters/CsrfToken'}]
+      responses:
+        '204': {description: Current session revoked}
+        '401': {$ref: '#/components/responses/AuthError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+  /auth/logout-all:
+    post:
+      tags: [Auth]
+      operationId: logoutAll
+      parameters: [{$ref: '#/components/parameters/CsrfToken'}]
+      responses:
+        '204': {description: All sessions revoked}
+        '401': {$ref: '#/components/responses/AuthError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+  /auth/google/start:
+    get:
+      tags: [Auth]
+      security: []
+      operationId: startGoogleLogin
+      parameters:
+        - in: query
+          name: returnTo
+          schema: {type: string, maxLength: 200, default: /app}
+      responses:
+        '302':
+          description: Redirect to Google authorization endpoint
+          headers:
+            Location: {schema: {type: string, format: uri}}
+        '429': {$ref: '#/components/responses/RateLimitError'}
+  /auth/google/callback:
+    get:
+      tags: [Auth]
+      security: []
+      operationId: completeGoogleLogin
+      parameters:
+        - {in: query, name: code, required: false, schema: {type: string, maxLength: 4096}}
+        - {in: query, name: state, required: true, schema: {type: string, maxLength: 512}}
+        - {in: query, name: error, required: false, schema: {type: string, maxLength: 200}}
+      responses:
+        '303':
+          description: Safe redirect to application result page
+          headers:
+            Location: {schema: {type: string}}
+        '400': {$ref: '#/components/responses/ValidationError'}
+  /auth/google/link/start:
+    post:
+      tags: [Auth]
+      operationId: startGoogleLink
+      parameters: [{$ref: '#/components/parameters/CsrfToken'}]
+      responses:
+        '200':
+          description: Short-lived Google authorization URL for explicit linking
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [authorizationUrl]
+                    properties:
+                      authorizationUrl: {type: string, format: uri}
+        '401': {$ref: '#/components/responses/AuthError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '409': {$ref: '#/components/responses/ConflictError'}
+  /auth/google/link/callback:
+    get:
+      tags: [Auth]
+      operationId: completeGoogleLink
+      parameters:
+        - {in: query, name: code, required: false, schema: {type: string, maxLength: 4096}}
+        - {in: query, name: state, required: true, schema: {type: string, maxLength: 512}}
+        - {in: query, name: error, required: false, schema: {type: string, maxLength: 200}}
+      responses:
+        '303':
+          description: Safe redirect to settings with link result
+          headers:
+            Location: {schema: {type: string}}
+        '400': {$ref: '#/components/responses/ValidationError'}
+        '401': {$ref: '#/components/responses/AuthError'}
+        '409': {$ref: '#/components/responses/ConflictError'}
+  /auth/password/forgot:
+    post:
+      tags: [Auth]
+      security: []
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email]
+              properties:
+                email: {type: string, format: email, maxLength: 254}
+      responses:
+        '202': {description: Request accepted regardless of account existence}
+        '400': {$ref: '#/components/responses/ValidationError'}
+        '429': {$ref: '#/components/responses/RateLimitError'}
+  /auth/password/reset:
+    post:
+      tags: [Auth]
+      security: []
+      operationId: resetPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token, password]
+              properties:
+                token: {type: string, minLength: 32, maxLength: 512}
+                password: {type: string, minLength: 12, maxLength: 128}
+      responses:
+        '204': {description: Password changed and all sessions revoked}
+        '400': {$ref: '#/components/responses/ValidationError'}
+        '410': {$ref: '#/components/responses/GoneError'}
+        '429': {$ref: '#/components/responses/RateLimitError'}
+  /me:
+    get:
+      tags: [Auth]
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: Current user and CSRF token
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [user, csrfToken]
+                    properties:
+                      user: {$ref: '#/components/schemas/User'}
+                      csrfToken: {type: string}
+        '401': {$ref: '#/components/responses/AuthError'}
+    patch:
+      tags: [Auth]
+      operationId: updateCurrentUser
+      parameters: [{$ref: '#/components/parameters/CsrfToken'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                username: {type: string, pattern: '^[A-Za-z0-9_]{3,30}$'}
+                displayName: {type: string, minLength: 1, maxLength: 80}
+              minProperties: 1
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UserResponse'}
+        '400': {$ref: '#/components/responses/ValidationError'}
+        '401': {$ref: '#/components/responses/AuthError'}
+        '409': {$ref: '#/components/responses/ConflictError'}
+  /quizzes:
+    get:
+      tags: [Quizzes]
+      operationId: listQuizzes
+      parameters:
+        - {in: query, name: status, schema: {$ref: '#/components/schemas/QuizStatus'}}
+        - {in: query, name: query, schema: {type: string, maxLength: 100}}
+        - {in: query, name: sort, schema: {type: string, enum: [updatedAt, -updatedAt, createdAt, -createdAt, title, -title], default: -updatedAt}}
+        - {$ref: '#/components/parameters/PageSize'}
+        - {$ref: '#/components/parameters/Cursor'}
+      responses:
+        '200':
+          description: Owned quiz page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, page]
+                properties:
+                  data: {type: array, items: {$ref: '#/components/schemas/QuizSummary'}}
+                  page: {$ref: '#/components/schemas/CursorPage'}
+        '400': {$ref: '#/components/responses/ValidationError'}
+        '401': {$ref: '#/components/responses/AuthError'}
+    post:
+      tags: [Quizzes]
+      operationId: createQuiz
+      parameters: [{$ref: '#/components/parameters/CsrfToken'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [title]
+              properties:
+                title: {type: string, minLength: 1, maxLength: 120}
+                description: {type: string, maxLength: 500, default: ''}
+      responses:
+        '201': {$ref: '#/components/responses/QuizSuccess'}
+        '400': {$ref: '#/components/responses/ValidationError'}
+        '401': {$ref: '#/components/responses/AuthError'}
+  /quizzes/{quizId}:
+    parameters: [{$ref: '#/components/parameters/QuizId'}]
+    get:
+      tags: [Quizzes]
+      operationId: getQuiz
+      responses:
+        '200': {$ref: '#/components/responses/QuizSuccess'}
+        '401': {$ref: '#/components/responses/AuthError'}
+        '404': {$ref: '#/components/responses/NotFoundError'}
+    patch:
+      tags: [Quizzes]
+      operationId: updateQuiz
+      parameters:
+        - {$ref: '#/components/parameters/CsrfToken'}
+        - {$ref: '#/components/parameters/IfMatch'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/QuizWrite'}
+      responses:
+        '200': {$ref: '#/components/responses/QuizSuccess'}
+        '400': {$ref: '#/components/responses/ValidationError'}
+        '401': {$ref: '#/components/responses/AuthError'}
+        '404': {$ref: '#/components/responses/NotFoundError'}
+        '409': {$ref: '#/components/responses/ConflictError'}
+    delete:
+      tags: [Quizzes]
+      operationId: deleteQuiz
+      parameters: [{$ref: '#/components/parameters/CsrfToken'}]
+      responses:
+        '204': {description: Quiz moved to trash}
+        '401': {$ref: '#/components/responses/AuthError'}
+        '404': {$ref: '#/components/responses/NotFoundError'}
+  /quizzes/{quizId}/publish:
+    post:
+      tags: [Quizzes]
+      operationId: publishQuiz
+      parameters:
+        - {$ref: '#/components/parameters/QuizId'}
+        - {$ref: '#/components/parameters/CsrfToken'}
+        - {$ref: '#/components/parameters/IfMatch'}
+      responses:
+        '200': {$ref: '#/components/responses/QuizSuccess'}
+        '400': {$ref: '#/components/responses/ValidationError'}
+        '404': {$ref: '#/components/responses/NotFoundError'}
+        '409': {$ref: '#/components/responses/ConflictError'}
+  /quizzes/{quizId}/preview:
+    get:
+      tags: [Quizzes]
+      operationId: previewQuiz
+      parameters: [{$ref: '#/components/parameters/QuizId'}]
+      responses:
+        '200':
+          description: Creator-only persisted preview document; creates no live data
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [quiz, persistedVersion, responsesSaved]
+                    properties:
+                      quiz: {$ref: '#/components/schemas/Quiz'}
+                      persistedVersion: {type: integer, minimum: 1}
+                      responsesSaved: {type: boolean, const: false}
+        '400': {$ref: '#/components/responses/ValidationError'}
+        '404': {$ref: '#/components/responses/NotFoundError'}
+  /quizzes/{quizId}/unpublish:
+    post:
+      tags: [Quizzes]
+      operationId: unpublishQuiz
+      parameters:
+        - {$ref: '#/components/parameters/QuizId'}
+        - {$ref: '#/components/parameters/CsrfToken'}
+        - {$ref: '#/components/parameters/IfMatch'}
+      responses:
+        '200': {$ref: '#/components/responses/QuizSuccess'}
+        '404': {$ref: '#/components/responses/NotFoundError'}
+        '409': {$ref: '#/components/responses/ConflictError'}
+  /ai/generations:
+    post:
+      tags: [AI]
+      operationId: generateQuiz
+      parameters:
+        - {$ref: '#/components/parameters/CsrfToken'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/GenerateQuizRequest'}
+      responses:
+        '201':
+          description: Validated generated quiz draft
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [generation, quiz]
+                    properties:
+                      generation: {$ref: '#/components/schemas/AIGeneration'}
+                      quiz: {$ref: '#/components/schemas/Quiz'}
+        '400': {$ref: '#/components/responses/ValidationError'}
+        '409': {$ref: '#/components/responses/ConflictError'}
+        '422': {$ref: '#/components/responses/AIInvalidError'}
+        '429': {$ref: '#/components/responses/RateLimitError'}
+        '503': {$ref: '#/components/responses/UnavailableError'}
+  /ai/generations/{generationId}:
+    get:
+      tags: [AI]
+      operationId: getGeneration
+      parameters:
+        - in: path
+          name: generationId
+          required: true
+          schema: {$ref: '#/components/schemas/UUID'}
+      responses:
+        '200':
+          description: Owned generation metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties: {data: {$ref: '#/components/schemas/AIGeneration'}}
+        '404': {$ref: '#/components/responses/NotFoundError'}
+  /quizzes/{quizId}/live-sessions:
+    post:
+      tags: [Live]
+      operationId: createLiveSession
+      parameters:
+        - {$ref: '#/components/parameters/QuizId'}
+        - {$ref: '#/components/parameters/CsrfToken'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                showLeaderboardAfterEachQuestion: {type: boolean, default: true}
+                allowLateJoin: {type: boolean, default: true}
+      responses:
+        '201': {$ref: '#/components/responses/HostSessionSuccess'}
+        '400': {$ref: '#/components/responses/ValidationError'}
+        '404': {$ref: '#/components/responses/NotFoundError'}
+        '409': {$ref: '#/components/responses/ConflictError'}
+  /live-sessions/{sessionId}:
+    get:
+      tags: [Live]
+      operationId: getHostSession
+      parameters: [{$ref: '#/components/parameters/SessionId'}]
+      responses:
+        '200': {$ref: '#/components/responses/HostSessionSuccess'}
+        '404': {$ref: '#/components/responses/NotFoundError'}
+  /live-sessions/{sessionId}/commands:
+    post:
+      tags: [Live]
+      operationId: sendHostCommand
+      parameters:
+        - {$ref: '#/components/parameters/SessionId'}
+        - {$ref: '#/components/parameters/CsrfToken'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/HostCommand'}
+      responses:
+        '200':
+          description: Idempotent command acknowledgement
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [commandId, stateVersion, state]
+                    properties:
+                      commandId: {$ref: '#/components/schemas/UUID'}
+                      stateVersion: {type: integer, format: int64, minimum: 1}
+                      state: {$ref: '#/components/schemas/LiveState'}
+        '404': {$ref: '#/components/responses/NotFoundError'}
+        '409': {$ref: '#/components/responses/ConflictError'}
+  /join/{code}:
+    parameters:
+      - {$ref: '#/components/parameters/JoinCode'}
+    get:
+      tags: [Live]
+      security: []
+      operationId: inspectJoinCode
+      responses:
+        '200':
+          description: Non-sensitive join metadata
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/JoinMetadataResponse'}
+        '404': {$ref: '#/components/responses/NotFoundError'}
+        '410': {$ref: '#/components/responses/GoneError'}
+    post:
+      tags: [Live]
+      security: []
+      operationId: joinSession
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKeyOptional'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [displayName]
+              properties:
+                displayName: {type: string, minLength: 1, maxLength: 30}
+      responses:
+        '200': {$ref: '#/components/responses/ParticipantJoinSuccess'}
+        '201': {$ref: '#/components/responses/ParticipantJoinSuccess'}
+        '400': {$ref: '#/components/responses/ValidationError'}
+        '409': {$ref: '#/components/responses/ConflictError'}
+        '410': {$ref: '#/components/responses/GoneError'}
+        '429': {$ref: '#/components/responses/RateLimitError'}
+  /play/{sessionId}/snapshot:
+    get:
+      tags: [Live]
+      security: [{participantSession: []}]
+      operationId: getParticipantSnapshot
+      parameters: [{$ref: '#/components/parameters/SessionId'}]
+      responses:
+        '200':
+          description: Role-filtered participant snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties: {data: {$ref: '#/components/schemas/ParticipantSnapshot'}}
+        '401': {$ref: '#/components/responses/AuthError'}
+        '404': {$ref: '#/components/responses/NotFoundError'}
+  /live-sessions/{sessionId}/results:
+    get:
+      tags: [Live]
+      operationId: getLiveSessionResults
+      parameters: [{$ref: '#/components/parameters/SessionId'}]
+      responses:
+        '200':
+          description: Creator-only complete results
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SessionResultResponse'}
+        '404': {$ref: '#/components/responses/NotFoundError'}
+  /sessions:
+    get:
+      tags: [History]
+      operationId: listSessionHistory
+      parameters:
+        - {$ref: '#/components/parameters/PageSize'}
+        - {$ref: '#/components/parameters/Cursor'}
+        - {in: query, name: quizId, schema: {$ref: '#/components/schemas/UUID'}}
+        - {in: query, name: status, schema: {$ref: '#/components/schemas/LiveState'}}
+        - {in: query, name: from, schema: {type: string, format: date-time}}
+        - {in: query, name: to, schema: {type: string, format: date-time}}
+        - {in: query, name: sort, schema: {type: string, enum: [createdAt, -createdAt, endedAt, -endedAt], default: -createdAt}}
+      responses:
+        '200':
+          description: Owned session page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, page]
+                properties:
+                  data: {type: array, items: {$ref: '#/components/schemas/SessionSummary'}}
+                  page: {$ref: '#/components/schemas/CursorPage'}
+        '400': {$ref: '#/components/responses/ValidationError'}
+  /sessions/{sessionId}:
+    get:
+      tags: [History]
+      operationId: getSessionHistory
+      parameters: [{$ref: '#/components/parameters/SessionId'}]
+      responses:
+        '200': {$ref: '#/components/responses/SessionResultSuccess'}
+        '404': {$ref: '#/components/responses/NotFoundError'}
+  /health/live:
+    get:
+      tags: [Operations]
+      security: []
+      operationId: liveness
+      responses:
+        '200': {$ref: '#/components/responses/HealthSuccess'}
+  /health/ready:
+    get:
+      tags: [Operations]
+      security: []
+      operationId: readiness
+      responses:
+        '200': {$ref: '#/components/responses/HealthSuccess'}
+        '503': {$ref: '#/components/responses/UnavailableError'}
+  /version:
+    get:
+      tags: [Operations]
+      security: []
+      operationId: version
+      responses:
+        '200':
+          description: Build identity
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version, commit]
+                properties:
+                  version: {type: string}
+                  commit: {type: string}
+components:
+  securitySchemes:
+    creatorSession:
+      type: apiKey
+      in: cookie
+      name: __Host-qf_session
+    participantSession:
+      type: apiKey
+      in: cookie
+      name: __Host-qf_participant
+  parameters:
+    CsrfToken:
+      in: header
+      name: X-CSRF-Token
+      required: true
+      schema: {type: string, minLength: 16, maxLength: 512}
+    IfMatch:
+      in: header
+      name: If-Match
+      required: true
+      schema: {type: string, pattern: '^"[1-9][0-9]*"$'}
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 64}
+    IdempotencyKeyOptional:
+      in: header
+      name: Idempotency-Key
+      required: false
+      schema: {type: string, minLength: 1, maxLength: 64}
+    PageSize:
+      in: query
+      name: pageSize
+      schema: {type: integer, minimum: 1, maximum: 50, default: 20}
+    Cursor:
+      in: query
+      name: cursor
+      schema: {type: string, maxLength: 1024}
+    QuizId:
+      in: path
+      name: quizId
+      required: true
+      schema: {$ref: '#/components/schemas/UUID'}
+    SessionId:
+      in: path
+      name: sessionId
+      required: true
+      schema: {$ref: '#/components/schemas/UUID'}
+    JoinCode:
+      in: path
+      name: code
+      required: true
+      schema: {type: string, pattern: '^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6}$'}
+  schemas:
+    UUID: {type: string, format: uuid}
+    DateTime: {type: string, format: date-time}
+    User:
+      type: object
+      additionalProperties: false
+      required: [id, email, username, displayName, emailVerified, loginMethods, createdAt]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        email: {type: string, format: email}
+        username: {type: string}
+        displayName: {type: string}
+        emailVerified: {type: boolean}
+        loginMethods: {type: array, uniqueItems: true, items: {type: string, enum: [password, google]}}
+        createdAt: {$ref: '#/components/schemas/DateTime'}
+    UserResponse:
+      type: object
+      required: [data]
+      properties: {data: {$ref: '#/components/schemas/User'}}
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [email, username, displayName, password]
+      properties:
+        email: {type: string, format: email, maxLength: 254}
+        username: {type: string, pattern: '^[A-Za-z0-9_]{3,30}$'}
+        displayName: {type: string, minLength: 1, maxLength: 80}
+        password: {type: string, minLength: 12, maxLength: 128}
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [identifier, password]
+      properties:
+        identifier: {type: string, minLength: 1, maxLength: 254}
+        password: {type: string, minLength: 1, maxLength: 128}
+    QuizStatus: {type: string, enum: [draft, published, archived]}
+    QuizSummary:
+      type: object
+      required: [id, title, description, status, questionCount, version, createdAt, updatedAt, publishedAt]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        title: {type: string}
+        description: {type: string}
+        status: {$ref: '#/components/schemas/QuizStatus'}
+        questionCount: {type: integer, minimum: 0}
+        version: {type: integer, minimum: 1}
+        createdAt: {$ref: '#/components/schemas/DateTime'}
+        updatedAt: {$ref: '#/components/schemas/DateTime'}
+        publishedAt: {oneOf: [{$ref: '#/components/schemas/DateTime'}, {type: 'null'}]}
+    AnswerOption:
+      type: object
+      additionalProperties: false
+      required: [id, position, text, isCorrect]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        position: {type: integer, minimum: 0, maximum: 5}
+        text: {type: string, minLength: 1, maxLength: 300}
+        isCorrect: {type: boolean}
+    Question:
+      type: object
+      additionalProperties: false
+      required: [id, type, position, prompt, explanation, difficulty, timeLimitSeconds, scoringMode, basePoints, options]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        type: {type: string, const: multiple_choice}
+        position: {type: integer, minimum: 0, maximum: 49}
+        prompt: {type: string, minLength: 1, maxLength: 500}
+        explanation: {type: string, maxLength: 1000}
+        difficulty: {type: string, enum: [easy, medium, hard]}
+        timeLimitSeconds: {type: integer, minimum: 10, maximum: 180}
+        scoringMode: {type: string, enum: [fixed, speed]}
+        basePoints: {type: integer, minimum: 100, maximum: 10000}
+        options: {type: array, minItems: 2, maxItems: 6, items: {$ref: '#/components/schemas/AnswerOption'}}
+    Quiz:
+      allOf:
+        - {$ref: '#/components/schemas/QuizSummary'}
+        - type: object
+          required: [questions]
+          properties:
+            questions: {type: array, maxItems: 50, items: {$ref: '#/components/schemas/Question'}}
+    AnswerOptionWrite:
+      type: object
+      additionalProperties: false
+      required: [position, text, isCorrect]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        position: {type: integer, minimum: 0, maximum: 5}
+        text: {type: string, minLength: 1, maxLength: 300}
+        isCorrect: {type: boolean}
+    QuestionWrite:
+      type: object
+      additionalProperties: false
+      required: [type, position, prompt, explanation, difficulty, timeLimitSeconds, scoringMode, basePoints, options]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        type: {type: string, const: multiple_choice}
+        position: {type: integer, minimum: 0, maximum: 49}
+        prompt: {type: string, minLength: 1, maxLength: 500}
+        explanation: {type: string, maxLength: 1000}
+        difficulty: {type: string, enum: [easy, medium, hard]}
+        timeLimitSeconds: {type: integer, minimum: 10, maximum: 180}
+        scoringMode: {type: string, enum: [fixed, speed]}
+        basePoints: {type: integer, minimum: 100, maximum: 10000}
+        options: {type: array, minItems: 2, maxItems: 6, items: {$ref: '#/components/schemas/AnswerOptionWrite'}}
+    QuizWrite:
+      type: object
+      additionalProperties: false
+      required: [title, description, questions]
+      properties:
+        title: {type: string, minLength: 1, maxLength: 120}
+        description: {type: string, maxLength: 500}
+        questions: {type: array, maxItems: 50, items: {$ref: '#/components/schemas/QuestionWrite'}}
+    GenerateQuizRequest:
+      type: object
+      additionalProperties: false
+      required: [topic, difficulty, questionCount, targetAudience, additionalInstructions, language]
+      properties:
+        topic: {type: string, minLength: 3, maxLength: 200}
+        difficulty: {type: string, enum: [easy, medium, hard]}
+        questionCount: {type: integer, minimum: 1, maximum: 20}
+        targetAudience: {type: string, maxLength: 200}
+        additionalInstructions: {type: string, maxLength: 1000}
+        language: {type: string, pattern: '^[a-z]{2}(-[A-Z]{2})?$'}
+    AIGeneration:
+      type: object
+      required: [id, status, provider, model, attempts, inputTokens, outputTokens, latencyMs, createdAt]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        status: {type: string, enum: [running, succeeded, failed]}
+        provider: {type: string}
+        model: {type: string}
+        attempts: {type: integer, minimum: 1, maximum: 2}
+        inputTokens: {type: integer, minimum: 0}
+        outputTokens: {type: integer, minimum: 0}
+        latencyMs: {type: integer, minimum: 0}
+        errorCode: {oneOf: [{type: string}, {type: 'null'}]}
+        quizId: {oneOf: [{$ref: '#/components/schemas/UUID'}, {type: 'null'}]}
+        createdAt: {$ref: '#/components/schemas/DateTime'}
+    LiveState: {type: string, enum: [lobby, question_open, question_results, leaderboard, ended]}
+    HostSession:
+      type: object
+      required: [id, joinCode, joinUrl, status, stateVersion, participantCount, questionCount]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        joinCode: {type: string, pattern: '^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6}$'}
+        joinUrl: {type: string, format: uri}
+        status: {$ref: '#/components/schemas/LiveState'}
+        stateVersion: {type: integer, format: int64, minimum: 1}
+        participantCount: {type: integer, minimum: 0}
+        questionCount: {type: integer, minimum: 1}
+        currentQuestionPosition: {oneOf: [{type: integer, minimum: 0}, {type: 'null'}]}
+        questionEndsAt: {oneOf: [{$ref: '#/components/schemas/DateTime'}, {type: 'null'}]}
+    HostCommand:
+      type: object
+      additionalProperties: false
+      required: [commandId, type, expectedVersion, payload]
+      properties:
+        commandId: {$ref: '#/components/schemas/UUID'}
+        type: {type: string, enum: [start_question, end_question, show_leaderboard, end_session]}
+        expectedVersion: {type: integer, format: int64, minimum: 1}
+        payload: {type: object, additionalProperties: true}
+    JoinMetadataResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [sessionId, title, status, joinable, participantCount]
+          properties:
+            sessionId: {$ref: '#/components/schemas/UUID'}
+            title: {type: string}
+            status: {$ref: '#/components/schemas/LiveState'}
+            joinable: {type: boolean}
+            participantCount: {type: integer, minimum: 0}
+    Participant:
+      type: object
+      required: [id, displayName, score, joinedAt]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        displayName: {type: string}
+        score: {type: integer, minimum: 0}
+        joinedAt: {$ref: '#/components/schemas/DateTime'}
+    ParticipantJoin:
+      type: object
+      required: [participant, sessionId, webSocketUrl]
+      properties:
+        participant: {$ref: '#/components/schemas/Participant'}
+        sessionId: {$ref: '#/components/schemas/UUID'}
+        webSocketUrl: {type: string, format: uri}
+    PublicQuestion:
+      type: object
+      description: Contains no correctness or answer-revealing explanation while open.
+      required: [id, position, prompt, options]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        position: {type: integer, minimum: 0}
+        prompt: {type: string}
+        options:
+          type: array
+          items:
+            type: object
+            required: [id, position, text]
+            properties:
+              id: {$ref: '#/components/schemas/UUID'}
+              position: {type: integer}
+              text: {type: string}
+    ParticipantSnapshot:
+      type: object
+      required: [sessionId, state, stateVersion, serverTime, participant]
+      properties:
+        sessionId: {$ref: '#/components/schemas/UUID'}
+        state: {$ref: '#/components/schemas/LiveState'}
+        stateVersion: {type: integer, format: int64, minimum: 1}
+        serverTime: {$ref: '#/components/schemas/DateTime'}
+        participant: {$ref: '#/components/schemas/Participant'}
+        question: {oneOf: [{$ref: '#/components/schemas/PublicQuestion'}, {type: 'null'}]}
+        questionStartedAt: {oneOf: [{$ref: '#/components/schemas/DateTime'}, {type: 'null'}]}
+        questionEndsAt: {oneOf: [{$ref: '#/components/schemas/DateTime'}, {type: 'null'}]}
+        ownAnswerAcknowledged: {type: boolean}
+        releasedResult:
+          oneOf:
+            - type: object
+              required: [correctOptionIds, explanation, isCorrect, points]
+              properties:
+                correctOptionIds: {type: array, items: {$ref: '#/components/schemas/UUID'}}
+                explanation: {type: string}
+                isCorrect: {type: boolean}
+                points: {type: integer, minimum: 0}
+            - type: 'null'
+    SessionSummary:
+      type: object
+      required: [id, quizTitle, status, participantCount, questionCount, createdAt, endedAt]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        quizTitle: {type: string}
+        status: {$ref: '#/components/schemas/LiveState'}
+        participantCount: {type: integer, minimum: 0}
+        questionCount: {type: integer, minimum: 1}
+        createdAt: {$ref: '#/components/schemas/DateTime'}
+        endedAt: {oneOf: [{$ref: '#/components/schemas/DateTime'}, {type: 'null'}]}
+    SessionResult:
+      type: object
+      required: [session, participants, questions]
+      properties:
+        session: {$ref: '#/components/schemas/SessionSummary'}
+        participants: {type: array, items: {$ref: '#/components/schemas/Participant'}}
+        questions:
+          type: array
+          items:
+            type: object
+            required: [id, position, prompt, correctOptionIds, options, answerCount, accuracy]
+            properties:
+              id: {$ref: '#/components/schemas/UUID'}
+              position: {type: integer}
+              prompt: {type: string}
+              correctOptionIds: {type: array, items: {$ref: '#/components/schemas/UUID'}}
+              options:
+                type: array
+                items:
+                  type: object
+                  required: [id, text, count, percentage]
+                  properties:
+                    id: {$ref: '#/components/schemas/UUID'}
+                    text: {type: string}
+                    count: {type: integer, minimum: 0}
+                    percentage: {type: number, minimum: 0, maximum: 100}
+              answerCount: {type: integer, minimum: 0}
+              accuracy: {type: number, minimum: 0, maximum: 100}
+    SessionResultResponse:
+      type: object
+      required: [data]
+      properties: {data: {$ref: '#/components/schemas/SessionResult'}}
+    CursorPage:
+      type: object
+      required: [nextCursor, hasMore]
+      properties:
+        nextCursor: {oneOf: [{type: string}, {type: 'null'}]}
+        hasMore: {type: boolean}
+    Error:
+      type: object
+      additionalProperties: false
+      required: [code, message, requestId, retryable]
+      properties:
+        code: {type: string, pattern: '^[A-Z0-9_]+$'}
+        message: {type: string}
+        requestId: {type: string}
+        fields: {type: object, additionalProperties: {type: array, items: {type: string}}}
+        retryable: {type: boolean}
+        retryAfterSeconds: {oneOf: [{type: integer, minimum: 0}, {type: 'null'}]}
+        details: {type: object, additionalProperties: true}
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties: {error: {$ref: '#/components/schemas/Error'}}
+  responses:
+    AuthSuccess:
+      description: Authenticated; sets rotated Secure HttpOnly cookie
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data:
+                type: object
+                required: [user, csrfToken]
+                properties:
+                  user: {$ref: '#/components/schemas/User'}
+                  csrfToken: {type: string}
+    QuizSuccess:
+      description: Full owner quiz
+      headers:
+        ETag: {schema: {type: string}}
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties: {data: {$ref: '#/components/schemas/Quiz'}}
+    HostSessionSuccess:
+      description: Creator-only session snapshot
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties: {data: {$ref: '#/components/schemas/HostSession'}}
+    ParticipantJoinSuccess:
+      description: Joined or resumed; sets participant HttpOnly cookie
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties: {data: {$ref: '#/components/schemas/ParticipantJoin'}}
+    SessionResultSuccess:
+      description: Complete owned session results
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/SessionResultResponse'}
+    HealthSuccess:
+      description: Healthy
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [status]
+            properties: {status: {type: string, const: ok}}
+    ValidationError: {$ref: '#/components/responses/Error400'}
+    AuthError: {$ref: '#/components/responses/Error401'}
+    ForbiddenError: {$ref: '#/components/responses/Error403'}
+    NotFoundError: {$ref: '#/components/responses/Error404'}
+    ConflictError: {$ref: '#/components/responses/Error409'}
+    GoneError: {$ref: '#/components/responses/Error410'}
+    AIInvalidError: {$ref: '#/components/responses/Error422'}
+    RateLimitError: {$ref: '#/components/responses/Error429'}
+    UnavailableError: {$ref: '#/components/responses/Error503'}
+    Error400: {description: Invalid request, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Error401: {description: Authentication required or invalid, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Error403: {description: CSRF or authorization failed, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Error404: {description: Resource not found or not visible, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Error409: {description: State, version, name, identity, or idempotency conflict, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Error410: {description: Token/session expired, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Error422: {description: Provider output could not produce a safe valid quiz, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Error429:
+      description: Rate limited
+      headers: {Retry-After: {schema: {type: integer, minimum: 1}}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}
+    Error503:
+      description: Temporarily unavailable
+      content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}
