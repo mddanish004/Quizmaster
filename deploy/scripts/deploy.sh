@@ -11,6 +11,53 @@ DEPLOY_DIR="${DEPLOY_DIR:-/opt/quizforge}"
 ENV_FILE="$DEPLOY_DIR/.env"
 DEPLOY_ENV="$DEPLOY_DIR/deploy.env"
 
+echo "[env] materializing root-owned .env from SSM (names logged, values never)"
+SSM_PATH="${SSM_PATH:-/quizforge/staging}"
+REGION="${AWS_REGION:-ap-southeast-1}"
+getp() {
+  aws ssm get-parameter --region "$REGION" --name "$SSM_PATH/$1" \
+    --with-decryption --query 'Parameter.Value' --output text
+}
+APP_DOMAIN="$(getp APP_DOMAIN)"
+case "$APP_DOMAIN" in
+  ""|"UNSET"*) echo "[env] FATAL: $SSM_PATH/APP_DOMAIN is unset" >&2; exit 1;;
+esac
+DATABASE_URL="$(getp DATABASE_URL)"
+MIGRATIONS_DATABASE_URL="$(getp MIGRATIONS_DATABASE_URL)"
+CSRF_SECRET="$(getp CSRF_SECRET)"
+PASSWORD_PEPPER="$(getp PASSWORD_PEPPER)"
+GOOGLE_CLIENT_ID="$(getp GOOGLE_CLIENT_ID)"
+GOOGLE_CLIENT_SECRET="$(getp GOOGLE_CLIENT_SECRET)"
+HF_TOKEN="$(getp HF_TOKEN)"
+umask 077
+{
+  printf 'APP_ENV=production\n'
+  printf 'APP_DOMAIN=%s\n' "$APP_DOMAIN"
+  printf 'APP_ORIGIN=https://%s\n' "$APP_DOMAIN"
+  printf 'HTTP_ADDR=:8080\n'
+  printf 'TRUSTED_PROXY_CIDRS=172.16.0.0/12\n'
+  printf 'DB_MAX_CONNS=10\n'
+  printf 'GOOGLE_REDIRECT_URL=https://%s/api/v1/auth/google/callback\n' "$APP_DOMAIN"
+  printf 'WS_ALLOWED_ORIGINS=https://%s\n' "$APP_DOMAIN"
+  printf 'MAIL_PROVIDER=mock\nMOCK_AI=false\nMOCK_OIDC=false\nMOCK_MAIL=false\n'
+  printf 'DATABASE_URL=%s\n' "$DATABASE_URL"
+  printf 'MIGRATIONS_DATABASE_URL=%s\n' "$MIGRATIONS_DATABASE_URL"
+  printf 'CSRF_SECRET=%s\n' "$CSRF_SECRET"
+  printf 'PASSWORD_PEPPER=%s\n' "$PASSWORD_PEPPER"
+  printf 'GOOGLE_CLIENT_ID=%s\n' "$GOOGLE_CLIENT_ID"
+  printf 'GOOGLE_CLIENT_SECRET=%s\n' "$GOOGLE_CLIENT_SECRET"
+  printf 'HF_TOKEN=%s\n' "$HF_TOKEN"
+} > "$ENV_FILE"
+chmod 600 "$ENV_FILE"
+echo "[env] wrote $ENV_FILE (0600)"
+
+echo "[compose] fetching pinned compose file"
+COMPOSE_REPO="${COMPOSE_REPO:-mddanish004/Quizmaster}"
+COMPOSE_REF="${COMPOSE_REF:?COMPOSE_REF (commit SHA) required}"
+curl -fsSL --max-time 60 \
+  "https://raw.githubusercontent.com/${COMPOSE_REPO}/${COMPOSE_REF}/deploy/compose.prod.yaml" \
+  -o "$DEPLOY_DIR/compose.prod.yaml"
+
 echo "[preflight] checking env file permissions"
 test -f "$ENV_FILE"
 test "$(stat -c %a "$ENV_FILE")" = "600"
