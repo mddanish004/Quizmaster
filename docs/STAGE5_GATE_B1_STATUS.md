@@ -19,7 +19,10 @@ Gate B.1 permits local changes, tests, read-only checks, plan generation, docs.
   `repo:<ORG/REPO>:ref:refs/tags/v*`.
 - **Recommendation: convert `quiz/` into a standalone repository** before first
   deploy (clean history, correct OIDC `ORG/REPO`, no risk of sweeping home-dir
-  files). Proposed actions (NOT executed — authorization required):
+  files). **DONE 2026-10-12 (operator-approved):** exported to
+  `/tmp/qf-export/quizforge`, committed (199 files, leak-check clean), pushed to
+  `github.com/mddanish004/Quizmaster` (`main`). TF `github_repo` default +
+  example now `mddanish004/Quizmaster`; alert email set.
   ```bash
   # Option 1 (preferred): standalone repo, history preserved via filter
   git clone /home/mddanish quizforge && cd quizforge
@@ -30,27 +33,26 @@ Gate B.1 permits local changes, tests, read-only checks, plan generation, docs.
   ```
   Either way: never `git add -A` from `/home/mddanish`; never push without approval.
 
-## 1. AWS account & region (P1) — BLOCKED, no access
+## 1. AWS account & region (P1) — identity confirmed, quotas NOT RUN
 
-- `aws` CLI: **not installed**; no `AWS_*` env vars; no `~/.aws` profile found.
-  `sts get-caller-identity` and all quota/zone checks are therefore **NOT RUN**.
-- Account ID / region config: unknown (nothing to redact — nothing observed).
-- Region decision stands: `ap-southeast-1` (Neon Singapore adjacency).
-- Exact setup (no keys in chat — use SSO/profile locally):
-  ```bash
-  # Install: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
-  aws configure sso   # or: aws configure  (IAM Identity Center preferred over static keys)
-  export AWS_PROFILE=<name> AWS_REGION=ap-southeast-1
-  aws sts get-caller-identity   # read-only sanity check
-  ```
-  Service quotas to confirm at plan time (console or `service-quotas`): EC2
-  running On-Demand `t4g.small` (Standard), EC2 EIP (default 5 — need 1),
-  EBS gp3. ECR/SSM/Route 53/CloudWatch/Budgets need no quota action.
+- Operator-verified 2026-10-12 via CloudShell: account `460169892311`;
+  `t4g.small` offered in **all AZs of both `ap-southeast-1` (a/b/c) and
+  `ap-south-2` (a/b/c)** — an earlier console "not offered" report was a view
+  issue, disproven by `describe-instance-type-offerings`.
+- Region decision: **stay `ap-southeast-1`** (Neon Singapore adjacency keeps DB
+  round trips at ~1–5 ms vs ~50–80 ms from Hyderabad). No config change needed.
+- Still NOT RUN from here (no credentials in this environment): quotas (EIP,
+  EBS), ECR/SSM/Route 53/Budgets pre-checks — operator runs at plan time.
+- Operator confirmed 2026-10-12: account-level $30 monthly budget + 80% email
+  alert created (TF per-project budget follows at apply).
 
 ## 2. Domain & DNS decision (P2) — operator chose existing domain + subdomain
 
-- Staging hostname pattern: `staging.<parent-domain>`; **parent domain value
-  still required from the operator** (e.g. `staging.example.com`).
+- Staging hostname fixed: `quizzy.mddanish.dev`. Operator-checked 2026-10-12:
+  **no Route 53 zone** — DNS is external, so `domain_name = ""` and the operator
+  creates one manual record post-apply: **A, host `quizzy`, value = Elastic IP
+  from `tofu output public_ip`, TTL 300**. Caddy issues TLS on first HTTPS hit
+  after DNS resolves; deploy itself succeeds over IP first.
 - Authoritative DNS: operator's existing provider can keep the record (simple `A`
   → Elastic IP, TTL 300) — a Route 53 hosted zone is **not required** in that
   case; set `domain_name = ""` and create the record manually. Use the TF
@@ -68,9 +70,9 @@ Gate B.1 permits local changes, tests, read-only checks, plan generation, docs.
 
 | Service | Status | Plan |
 |---|---|---|
-| Neon staging | BLOCKED (no URL) | Console → Singapore project → branch `staging`; pooled → `DATABASE_URL`, direct → `MIGRATIONS_DATABASE_URL`; disposable-branch `up` check (18 tables). Full steps: `AWS_SETUP_GUIDE.md` §2 + `DEPLOYMENT.md` runbook |
-| Hugging Face | BLOCKED (no token) | Fine-grained token (Inference Providers `write`) + spend cap; verify `GET /v1/models` for `Qwen/Qwen3-32B` strict-schema routing (fallback `Qwen/Qwen2.5-7B-Instruct-1M`, or pin `HF_PROVIDER=cerebras`); one small live generation at staging. Free tier is $0.10/mo — never unlimited |
-| Google OAuth | BLOCKED (no client) | Web-application client; redirect per §2; consent screen + test users while Testing; real first-time/returning/link/invalid-callback/logout smoke at staging. No verification bypass, ever |
+| Neon staging | **MIGRATED 2026-10-12** — operator ran `migrate up` from CloudShell against the staging branch: 7/7 ok (`extensions`, `auth`, `quiz`, `ai`, `live`, `live_check`, `oauth_nonce`). Table-count **confirmed 18/18** 2026-10-12. Note: operator briefly pasted the pooled URL in chat → password rotated before use; nothing stored. `channel_binding=require` may need stripping for pgx if the smoke connect fails. Guide: `AWS_SETUP_GUIDE.md` §2 + `DEPLOYMENT.md` runbook |
+| Hugging Face | **ROUTING VERIFIED 2026-10-12** — live catalog confirms `Qwen/Qwen3-32B` served by `deepinfra` (`live`, `supports_structured_output=True`; also live on nscale/featherless-ai without structured output). Default `HF_MODEL` stands; `HF_PROVIDER=auto` is acceptable with deepinfra as the known-good route. One small live generation still to run at staging. Free tier $0.10/mo |
+| Google OAuth | **READY 2026-10-12** — operator created web client + consent (Testing mode, 2 test users). Staging hostname fixed: `quizzy.mddanish.dev`; redirect `https://quizzy.mddanish.dev/api/v1/auth/google/callback`. Real login smoke waits for staging. No verification bypass, ever |
 | Email (SES) | **NOT NEEDED for staging** | `MAIL_PROVIDER` defaults to `mock` (`config.go:129`); password-reset flow is testable without mail delivery. Do NOT create SES identities/send approvals for staging — revisit for production only |
 
 ## 4. OpenTofu configuration review (P4) — PASS as specified
@@ -95,19 +97,18 @@ Gate B.1 permits local changes, tests, read-only checks, plan generation, docs.
   Docker, pinned Compose, awslogs-default daemon config. No incorrect defaults
   found; architecture unchanged.
 
-## 5. Real infrastructure plan (P5) — NOT RUN (blockers named)
+## 5. Real infrastructure plan (P5) — PLAN GENERATED 2026-10-12, apply NOT run
 
-Blockers: (a) no AWS credentials in this environment; (b) `staging.tfvars`
-missing two operator values — `github_repo` (still `CHANGEME/quizforge`) and
-parent `domain_name` (may stay `""` for IP-first). Nothing invented.
-First-plan command set (operator machine, after §11 items):
-```bash
-cd deploy/opentofu && cp terraform.tfvars.example staging.tfvars  # fill values
-tofu init && tofu fmt -check && tofu validate && tflint
-tofu plan -var-file=staging.tfvars -out=staging.plan   # review, never -auto-approve
-```
-Expected: ≈ 30 creates, 0 destroys; any replacement/deletion is a stop signal.
-Plans/state are gitignored and never committed.
+Operator-run in CloudShell (tofu 1.9.0, AWS provider 5.100.0, account
+`460169892311`, `ap-southeast-1`): `init` + `validate` Success;
+`fmt -check` flags only `staging.tfvars` alignment (cosmetic — run `tofu fmt`);
+**`plan`: 38 to add, 0 to change, 0 to destroy**, saved to `staging.plan`.
+Review: creates match the approved graph (SG+7 rules, EIP+assoc, t4g.small/
+IMDSv2-required/encrypted gp3 in default subnet, instance+deploy roles, OIDC
+provider, 3 ECR repos + lifecycles, 1 SSM String, 3 log groups, SNS+sub, 2
+alarms, S3×5, budget). No DNS resources (external DNS — correct); no secret
+values (APP_DOMAIN placeholder only); no replacements/deletions; tags present.
+`apply "staging.plan"` awaits explicit Gate B.2 approval — never `-auto-approve`.
 
 ## 6. Deployment costs (P6) — reconfirmed, assumptions explicit
 
@@ -143,7 +144,15 @@ release → ECR → SSM → Neon → bucket empty+delete. Full runbook:
    (private CLI step — never in chat). 8. Confirm the SNS subscription email.
    9. Approve `tofu apply` (Gate B.2) — then a `v*` tag ships staging.
 
-## 9. Approval boundary — exact Gate B.2 asks
+## 9. Approval boundary — APPLY EXECUTED 2026-10-12 (operator-approved)
+
+`tofu apply "staging.plan"` succeeded: instance `i-0f63357367b2376b1`, EIP
+`18.136.59.140`, ECR `…/quizforge-{api,web}`, deploy role
+`…:role/quizforge-staging-github-deploy`, bucket
+`quizforge-staging-backups-20261012144502463400000001`, log groups
+`/quizforge-staging/{api,web,host}`, SSM `/quizforge/staging/` (operator-uploaded 2026-10-12).
+Spend now active (~$21/mo idle base). Remaining: SNS confirm → manual `quizzy`
+A record → GitHub secrets → `v*` tag → live smoke.
 
 (a) `tofu init/plan/apply` for staging (≈ 30 resources, ~$22–28/mo base);
 (b) creating the Route 53 A record if the zone is in Route 53 (else you create it
