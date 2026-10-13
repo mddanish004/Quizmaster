@@ -16,8 +16,19 @@ echo "[env] materializing root-owned .env from SSM (names logged, values never)"
 SSM_PATH="${SSM_PATH:-/quizforge/staging}"
 REGION="${AWS_REGION:-ap-southeast-1}"
 getp() {
-  aws ssm get-parameter --region "$REGION" --name "$SSM_PATH/$1" \
-    --with-decryption --query 'Parameter.Value' --output text
+  local name="$1" v rc
+  v=$(aws ssm get-parameter --region "$REGION" --name "$SSM_PATH/$name" \
+    --with-decryption --query 'Parameter.Value' --output text 2>/tmp/getp.err); rc=$?
+  if [ $rc -ne 0 ]; then
+    echo "[env] FATAL: cannot read $SSM_PATH/$name (aws exit $rc): $(head -c 200 /tmp/getp.err)" >&2
+    exit 1
+  fi
+  if [ -z "$v" ] || [ "$v" = "None" ]; then
+    echo "[env] FATAL: $SSM_PATH/$name returned empty" >&2
+    exit 1
+  fi
+  echo "[env] got $name (${#v} chars)"
+  printf '%s' "$v"
 }
 APP_DOMAIN="$(getp APP_DOMAIN)"
 case "$APP_DOMAIN" in
