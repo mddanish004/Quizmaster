@@ -151,8 +151,11 @@ systemctl daemon-reload
 systemctl enable --now quizforge-janitor.timer
 
 echo "[verify] waiting for readiness"
+# NOTE: probe from INSIDE the api container netns. The host publishes no :8080
+# (only web 80/443), so host-side curl always gets 000 (S5-20).
+API_CID="$(docker compose -f "$DEPLOY_DIR/compose.prod.yaml" ps -q api)"
 for i in $(seq 1 24); do
-  if curl -fsS http://127.0.0.1:8080/health/ready >/dev/null 2>&1; then
+  if docker exec "$API_CID" /quizforge healthcheck "--url=http://127.0.0.1:8080/health/ready" >/dev/null 2>&1; then
     echo "[verify] ready"
     break
   fi
@@ -160,8 +163,8 @@ for i in $(seq 1 24); do
   if [ "$i" = "24" ]; then echo "[verify] FAILED"; exit 1; fi
 done
 
-echo "[verify] build identity"
-curl -fsS http://127.0.0.1:8080/version
-echo
+echo "[verify] build identity (/version returns 200 on the pinned digests)"
+docker exec "$API_CID" /quizforge healthcheck "--url=http://127.0.0.1:8080/version"
+echo "api=$API_DIGEST web=$WEB_DIGEST"
 echo "$API_DIGEST $WEB_DIGEST $(date -u +%FT%TZ)" >> "$DEPLOY_DIR/deploys.log"
 echo "[deploy] complete — previous digests retained in $DEPLOY_DIR/previous.env for rollback"
