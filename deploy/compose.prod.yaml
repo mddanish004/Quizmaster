@@ -33,6 +33,7 @@ services:
 
   web:
     image: ${ECR_REGISTRY}/quizforge-web@${IMAGE_WEB_DIGEST:?IMAGE_WEB_DIGEST is required}
+    env_file: /opt/quizforge/.env # Caddy reads {$APP_DOMAIN} from its own environment (S5-21)
     depends_on:
       api: { condition: service_healthy }
     ports: ["80:80", "443:443"]
