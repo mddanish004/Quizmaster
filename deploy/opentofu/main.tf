@@ -122,6 +122,15 @@ resource "aws_vpc_security_group_egress_rule" "dns_tcp" {
   cidr_ipv4         = "0.0.0.0/0"
 }
 
+resource "aws_vpc_security_group_egress_rule" "postgres_out" {
+  security_group_id = aws_security_group.app.id
+  description       = "Neon PostgreSQL pooled + direct (S5-16)."
+  from_port         = 5432
+  to_port           = 5432
+  ip_protocol       = "tcp"
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
 resource "aws_vpc_security_group_egress_rule" "ntp" {
   security_group_id = aws_security_group.app.id
   description       = "Clock sync (TLS cert validation depends on it)."
