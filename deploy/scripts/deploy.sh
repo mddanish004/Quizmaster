@@ -42,23 +42,26 @@ GOOGLE_CLIENT_ID="$(getp GOOGLE_CLIENT_ID)"
 GOOGLE_CLIENT_SECRET="$(getp GOOGLE_CLIENT_SECRET)"
 HF_TOKEN="$(getp HF_TOKEN)"
 umask 077
+# Single-quote every value (escaping embedded quotes) so arbitrary secret
+# characters can never break shell sourcing of this file (S5-17).
+sq() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
 {
   printf 'APP_ENV=production\n'
-  printf 'APP_DOMAIN=%s\n' "$APP_DOMAIN"
-  printf 'APP_ORIGIN=https://%s\n' "$APP_DOMAIN"
+  printf 'APP_DOMAIN=%s\n' "$(sq "$APP_DOMAIN")"
+  printf 'APP_ORIGIN=%s\n' "$(sq "https://$APP_DOMAIN")"
   printf 'HTTP_ADDR=:8080\n'
   printf 'TRUSTED_PROXY_CIDRS=172.16.0.0/12\n'
   printf 'DB_MAX_CONNS=10\n'
-  printf 'GOOGLE_REDIRECT_URL=https://%s/api/v1/auth/google/callback\n' "$APP_DOMAIN"
-  printf 'WS_ALLOWED_ORIGINS=https://%s\n' "$APP_DOMAIN"
+  printf 'GOOGLE_REDIRECT_URL=%s\n' "$(sq "https://$APP_DOMAIN/api/v1/auth/google/callback")"
+  printf 'WS_ALLOWED_ORIGINS=%s\n' "$(sq "https://$APP_DOMAIN")"
   printf 'MAIL_PROVIDER=mock\nMOCK_AI=false\nMOCK_OIDC=false\nMOCK_MAIL=false\n'
-  printf 'DATABASE_URL=%s\n' "$DATABASE_URL"
-  printf 'MIGRATIONS_DATABASE_URL=%s\n' "$MIGRATIONS_DATABASE_URL"
-  printf 'CSRF_SECRET=%s\n' "$CSRF_SECRET"
-  printf 'PASSWORD_PEPPER=%s\n' "$PASSWORD_PEPPER"
-  printf 'GOOGLE_CLIENT_ID=%s\n' "$GOOGLE_CLIENT_ID"
-  printf 'GOOGLE_CLIENT_SECRET=%s\n' "$GOOGLE_CLIENT_SECRET"
-  printf 'HF_TOKEN=%s\n' "$HF_TOKEN"
+  printf 'DATABASE_URL=%s\n' "$(sq "$DATABASE_URL")"
+  printf 'MIGRATIONS_DATABASE_URL=%s\n' "$(sq "$MIGRATIONS_DATABASE_URL")"
+  printf 'CSRF_SECRET=%s\n' "$(sq "$CSRF_SECRET")"
+  printf 'PASSWORD_PEPPER=%s\n' "$(sq "$PASSWORD_PEPPER")"
+  printf 'GOOGLE_CLIENT_ID=%s\n' "$(sq "$GOOGLE_CLIENT_ID")"
+  printf 'GOOGLE_CLIENT_SECRET=%s\n' "$(sq "$GOOGLE_CLIENT_SECRET")"
+  printf 'HF_TOKEN=%s\n' "$(sq "$HF_TOKEN")"
 } > "$ENV_FILE"
 chmod 600 "$ENV_FILE"
 echo "[env] wrote $ENV_FILE (0600)"
