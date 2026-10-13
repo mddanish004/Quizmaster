@@ -233,7 +233,8 @@ the known shared-DB flake — env issue, not code) · secret scan clean.
 | S5-13 | High (silent deploy) | Workflow never polled the SSM invocation — dispatch success masked remote failure, so `v0.1.9` looked green while nothing ran. | New wait-step polls to terminal status, tails output, fails the job on remote error (20 min cap). |
 | S5-14 | Medium (SSM quoting) | First gated run caught a real error fast: over-escaped `&&` in the SSM command array broke `cd` on the host. | Dropped shell chaining entirely — `deploy.sh` defaults to `/opt/quizforge`, so the command is a single env-prefixed invocation. No `&&`/`cd` in SSM arrays ever again. |
 | S5-15 | Medium (migrate tag) | `deploy.sh` pulled `quizforge-migrate:latest`, which CI never pushes (SHA tags only) — migrate step failed after env/ECR succeeded. | Migrate digest plumbed end-to-end (build output → SSM arg → `image@digest`), same as api/web. |
-| S5-16 | High (DB unreachable) | Migrate image pulled but `dial tcp <neon>:5432: connect: connection timed out` — our SG egress allowlist (80/443/DNS/NTP) never permitted PostgreSQL. The app itself would have failed identically. | New egress rule `5432/tcp → 0.0.0.0/0` (Neon IPs are dynamic; port-scoped). Needs targeted `apply`, then re-run failed jobs — no new tag. |
+| S5-16 | High (DB unreachable) | Migrate image pulled but `dial tcp <neon>:5432: connect: connection timed out` — our SG egress allowlist (80/443/DNS/NTP) never permitted PostgreSQL. The app itself would have failed identically. | New egress rule `5432/tcp → 0.0.0.0/0` (Neon IPs are dynamic; port-scoped). Applied via targeted `apply`; re-ran failed jobs. |
+| S5-18 | Medium (driver scheme) | With connectivity fixed, migrate failed on `unknown driver postgresql` — golang-migrate registers `postgres`, but Neon issues `postgresql://` URLs. | `deploy.sh` normalizes the scheme prefix before invoking migrate (verified substitution locally). |
 
 ### Gate B readiness
 

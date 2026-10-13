@@ -112,9 +112,12 @@ chmod 0644 "$DEPLOY_ENV"
 echo "[migrate] running backward-compatible migrations"
 # shellcheck disable=SC1090
 set -a; . "$ENV_FILE"; set +a # host needs MIGRATIONS_DATABASE_URL (0600, root-only, never echoed)
+# golang-migrate registers the driver as "postgres"; Neon issues
+# "postgresql://" URLs, which it rejects with "unknown driver" (S5-18).
+MIGRATE_URL="${MIGRATIONS_DATABASE_URL/#postgresql:/postgres:}"
 docker run --rm \
   "${ECR_REGISTRY}/quizforge-migrate@${MIGRATE_DIGEST}" \
-  -path /migrations -database "${MIGRATIONS_DATABASE_URL:?}" up
+  -path /migrations -database "${MIGRATE_URL:?}" up
 
 echo "[deploy] pulling + recreating services"
 docker compose -f "$DEPLOY_DIR/compose.prod.yaml" pull
