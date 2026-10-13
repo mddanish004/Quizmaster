@@ -128,7 +128,13 @@ Development uses `compose.override.yaml`: Vite dev server with source mount, Go 
   encode zstd gzip
 
   # Exclusive handlers first: try_files is a rewrite and would otherwise
-  # shadow /api/* and /ws/* with the SPA fallback.
+  # shadow /health/*, /version, /api/* and /ws/* with the SPA fallback.
+  handle /health/* {
+    reverse_proxy api:8080
+  }
+  handle /version {
+    reverse_proxy api:8080
+  }
   handle /api/* {
     reverse_proxy api:8080 {
       health_uri /health/live
@@ -311,10 +317,16 @@ Estimated hands-on time: 2-4 hours excluding DNS propagation and Google verifica
    Never attach broad IAM credentials; GitHub deploys via the OIDC role.
 6. **Secrets on host** — run the SSM fetch script to materialize
    `/opt/quizforge/.env` mode `0600` (names logged, values never).
-7. **Push the release workflow** — push a `v*` tag (or run `workflow_dispatch`); CI builds ARM64 api/web/migrate images, scans with Trivy, pushes immutable digests to ECR. Pushes to `main` never deploy; the `production` environment requires a human approver.
+7. **Push the release workflow** — first run
+   `bash deploy/scripts/deploy_test.sh` and `bash -n deploy/scripts/deploy.sh`;
+   then push a `v*` tag (or run `workflow_dispatch`). CI builds multi-arch
+   api/web/migrate images, scans with Trivy, and pushes immutable digests to ECR.
+   Pushes to `main` never deploy; the `production` environment requires a human
+   approver.
 8. **Deploy** — approve the `production` environment; the workflow runs
-   `deploy/scripts/deploy.sh <api> <web>` over SSM (migrate → switch → readiness
-   gate → digest log). Keep `previous.env` for rollback.
+   `deploy/scripts/deploy.sh <api-digest> <web-digest> <migrate-digest>` over SSM
+   (migrate → switch → readiness gate → digest log). Keep `previous.env` for
+   rollback.
 9. **Smoke** — `https://quiz.example/health/ready`, `/version` (expect the release
    commit), landing page, register/login, mock-generate a draft, host a live
    question with two browsers, refresh both mid-question, check history.
