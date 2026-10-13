@@ -21,6 +21,10 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2 (verified)
+      - name: Validate deployment driver
+        run: |
+          bash -n deploy/scripts/deploy.sh deploy/scripts/deploy_test.sh
+          bash deploy/scripts/deploy_test.sh
       - uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4 (verified)
         with:
           role-to-assume: ${{ secrets.DEPLOY_ROLE_ARN }}

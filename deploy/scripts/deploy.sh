@@ -17,9 +17,11 @@ SSM_PATH="${SSM_PATH:-/quizforge/staging}"
 REGION="${AWS_REGION:-ap-southeast-1}"
 getp() {
   local name="$1" v rc
-  v=$(aws ssm get-parameter --region "$REGION" --name "$SSM_PATH/$name" \
-    --with-decryption --query 'Parameter.Value' --output text 2>/tmp/getp.err); rc=$?
-  if [ $rc -ne 0 ]; then
+  if v=$(aws ssm get-parameter --region "$REGION" --name "$SSM_PATH/$name" \
+    --with-decryption --query 'Parameter.Value' --output text 2>/tmp/getp.err); then
+    :
+  else
+    rc=$?
     echo "[env] FATAL: cannot read $SSM_PATH/$name (aws exit $rc): $(head -c 200 /tmp/getp.err)" >&2
     exit 1
   fi
@@ -27,7 +29,9 @@ getp() {
     echo "[env] FATAL: $SSM_PATH/$name returned empty" >&2
     exit 1
   fi
-  echo "[env] got $name (${#v} chars)"
+  # getp is called through command substitution. Keep diagnostics on stderr so
+  # stdout contains only the parameter value assigned to the caller.
+  echo "[env] got $name (${#v} chars)" >&2
   printf '%s' "$v"
 }
 APP_DOMAIN="$(getp APP_DOMAIN)"
@@ -124,7 +128,8 @@ docker compose -f "$DEPLOY_DIR/compose.prod.yaml" pull
 docker compose -f "$DEPLOY_DIR/compose.prod.yaml" up -d --remove-orphans
 
 echo "[janitor] installing daily retention timer"
-cat > /etc/systemd/system/quizforge-janitor.service <<EOF
+SYSTEMD_DIR="${SYSTEMD_DIR:-/etc/systemd/system}"
+cat > "$SYSTEMD_DIR/quizforge-janitor.service" <<EOF
 [Unit]
 Description=QuizForge retention janitor
 After=docker.service
@@ -133,7 +138,7 @@ Type=oneshot
 EnvironmentFile=$DEPLOY_ENV
 ExecStart=/usr/bin/docker run --rm --env-file $ENV_FILE \${ECR_REGISTRY}/quizforge-api@\${IMAGE_API_DIGEST} /quizforge janitor
 EOF
-cat > /etc/systemd/system/quizforge-janitor.timer <<EOF
+cat > "$SYSTEMD_DIR/quizforge-janitor.timer" <<EOF
 [Unit]
 Description=QuizForge retention janitor (daily)
 [Timer]
