@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Migrate production database (Neon, direct URL)
         # golang-migrate wants a postgres:// scheme; Neon issues
         # postgresql://, so normalize before invoking.
