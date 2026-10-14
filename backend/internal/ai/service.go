@@ -80,9 +80,15 @@ type breaker struct {
 // (mock when MOCK_AI/HF token absent, real Hugging Face otherwise).
 func NewService(cfg *config.Config, pool *pgxpool.Pool, provider Provider, log *slog.Logger) *Service {
 	if provider == nil {
-		if cfg.MockAI || cfg.HFToken == "" {
+		switch {
+		case cfg.MockAI || (cfg.HFToken == "" && cfg.GroqAPIKey == ""):
 			provider = NewMockProvider()
-		} else {
+		case cfg.AIProvider == "groq" && cfg.GroqAPIKey != "":
+			provider = NewGroqProvider(cfg.GroqBaseURL, cfg.GroqAPIKey, cfg.GroqModel, cfg.AIRequestTimeout)
+		case cfg.AIProvider == "groq":
+			// Explicit groq without a key: honest mock, never unauthenticated calls.
+			provider = NewMockProvider()
+		default:
 			provider = NewHuggingFaceProvider(cfg.HFBaseURL, cfg.HFToken, cfg.HFModel, cfg.HFProvider, cfg.AIRequestTimeout)
 		}
 	}

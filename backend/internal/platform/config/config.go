@@ -50,6 +50,9 @@ type Config struct {
 	HFBaseURL         string
 	HFModel           string
 	HFProvider        string
+	GroqAPIKey        string
+	GroqBaseURL       string
+	GroqModel         string
 	AIRequestTimeout  time.Duration
 	AIEndpointTimeout time.Duration
 	AIMaxInFlight     int
@@ -123,6 +126,9 @@ func Load() (*Config, error) {
 		HFBaseURL:             getenv("HF_BASE_URL", "https://router.huggingface.co/v1"),
 		HFModel:               getenv("HF_MODEL", "Qwen/Qwen3-32B"),
 		HFProvider:            getenv("HF_PROVIDER", "auto"),
+		GroqAPIKey:            os.Getenv("GROQ_API_KEY"),
+		GroqBaseURL:           getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1"),
+		GroqModel:             getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
 		AIMaxInFlight:         4,
 		AIDailyUserLimit:      5,
 		AIDailyIPLimit:        20,

@@ -8,7 +8,9 @@ Initial model: `Qwen/Qwen3-32B`, because Hugging Face's official structured-outp
 
 Stage 4 revalidation (2026-10-11): the public model catalog has moved on (Qwen3.5/3.6/3.8 families; `Qwen/Qwen3-32B` no longer appears in recommended chat lists), so staging MUST check `/v1/models` for a routed strict-schema model before relying on the default. Provider selection uses the documented model suffix (`model:provider`, `model:fastest`); `HF_PROVIDER=auto` (default) leaves routing to the server. Free tier remains $0.10/month credit (spent at partner rates, no documented request/hour cap); PRO $9/mo includes $2.
 
-Stage 5 revalidation (2026-10-11): the current structured-output guide still demonstrates `Qwen/Qwen3-32B` (via `provider="cerebras"`) with the same OpenAI-compatible request shape the adapter sends, so the default is KEPT. Staging must still verify routing via `GET /v1/models` plus one small generation; recorded fallback is `Qwen/Qwen2.5-7B-Instruct-1M`; pin `HF_PROVIDER=cerebras` if auto-routing fails. Adapter code unchanged; contract tests re-run green.
+Stage 5 revalidation (2026-10-11): the current structured-output guide still demonstrates `Qwen/Qwen3-32B` (via `provider="cerebras"`) with the same OpenAI-compatible request shape the adapter sends, so the default is KEPT. Live-catalog verification (2026-10-12, operator-run `GET /v1/models`): `Qwen/Qwen3-32B` is `live` on `deepinfra` with `supports_structured_output=True` (also live on nscale/featherless-ai without structured output). `HF_PROVIDER=auto` retained; deepinfra is the known-good route. Adapter code unchanged; contract tests re-run green.
+
+Stage 5 pivot (2026-10-14, ADR-015): host probes returned HF HTTP 402 "no remaining credits" on both `auto` and `:deepinfra` — billing exhausted, not routing. Per zero-cost constraint, staging switches to the Groq free tier (`AI_PROVIDER=groq`, `openai/gpt-oss-120b`, strict `json_schema`, shared `doChatCompletion` transport). HF default, catalog checks, and contract tests are unchanged; a `402 → REJECTED` mapping test locks the billing signal.
 
 ## Provider Interface
 

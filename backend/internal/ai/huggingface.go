@@ -133,6 +133,20 @@ type chatResponse struct {
 
 // GenerateQuiz performs one non-streaming structured request (no retry here; service owns retry).
 func (p *HuggingFaceProvider) GenerateQuiz(ctx context.Context, req GenerateRequest) (GeneratedQuiz, Usage, error) {
+	// Provider routing uses the documented model suffix (e.g. "model:fireworks-ai"
+	// or "model:fastest"); "auto" (and empty) means server-side selection.
+	model := p.ModelName
+	if p.Provider != "" && p.Provider != "auto" && !strings.Contains(model, ":") {
+		model += ":" + p.Provider
+	}
+	return doChatCompletion(ctx, p.HTTP, p.BaseURL, p.Token, model, p.ModelName, p.Provider, req, p.MaxBody)
+}
+
+// doChatCompletion performs one non-streaming structured request against an
+// OpenAI-compatible chat completion endpoint. Shared by the Hugging Face and
+// Groq adapters (service owns retry); reqModel goes on the wire while
+// usageModel/providerLabel are recorded for honest labeling.
+func doChatCompletion(ctx context.Context, client *http.Client, baseURL, token, reqModel, usageModel, providerLabel string, req GenerateRequest, maxBody int64) (GeneratedQuiz, Usage, error) {
 	start := time.Now()
 	maxTokens := req.QuestionCount * 400
 	if maxTokens < 1000 {
@@ -141,14 +155,8 @@ func (p *HuggingFaceProvider) GenerateQuiz(ctx context.Context, req GenerateRequ
 	if maxTokens > 6000 {
 		maxTokens = 6000
 	}
-	// Provider routing uses the documented model suffix (e.g. "model:fireworks-ai"
-	// or "model:fastest"); "auto" (and empty) means server-side selection.
-	model := p.ModelName
-	if p.Provider != "" && p.Provider != "auto" && !strings.Contains(model, ":") {
-		model += ":" + p.Provider
-	}
 	body := chatRequest{
-		Model: model,
+		Model: reqModel,
 		Messages: []chatMessage{
 			{Role: "system", Content: SystemPrompt(req.QuestionCount, req.Language, req.Difficulty)},
 			{Role: "user", Content: UserBrief(req.Topic, req.TargetAudience, req.AdditionalInstructions)},
@@ -167,13 +175,13 @@ func (p *HuggingFaceProvider) GenerateQuiz(ctx context.Context, req GenerateRequ
 	if err != nil {
 		return GeneratedQuiz{}, Usage{}, &ProviderError{Kind: KindInvalidResponse, Cause: err}
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.BaseURL+"/chat/completions", bytes.NewReader(raw))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/chat/completions", bytes.NewReader(raw))
 	if err != nil {
 		return GeneratedQuiz{}, Usage{}, &ProviderError{Kind: KindUnavailable, Cause: err}
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+p.Token)
-	resp, err := p.HTTP.Do(httpReq)
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+	resp, err := client.Do(httpReq)
 	if err != nil {
 		if ctx.Err() != nil {
 			return GeneratedQuiz{}, Usage{}, &ProviderError{Kind: KindTimeout, Cause: err}
@@ -181,13 +189,13 @@ func (p *HuggingFaceProvider) GenerateQuiz(ctx context.Context, req GenerateRequ
 		return GeneratedQuiz{}, Usage{}, &ProviderError{Kind: KindUnavailable, Cause: err}
 	}
 	defer resp.Body.Close()
-	limited := io.LimitReader(resp.Body, p.MaxBody+1)
+	limited := io.LimitReader(resp.Body, maxBody+1)
 	data, err := io.ReadAll(limited)
 	if err != nil {
 		return GeneratedQuiz{}, Usage{}, &ProviderError{Kind: KindUnavailable, Cause: err}
 	}
-	if int64(len(data)) > p.MaxBody {
-		return GeneratedQuiz{}, Usage{}, &ProviderError{Kind: KindInvalidResponse, Cause: fmt.Errorf("response exceeds %d bytes", p.MaxBody)}
+	if int64(len(data)) > maxBody {
+		return GeneratedQuiz{}, Usage{}, &ProviderError{Kind: KindInvalidResponse, Cause: fmt.Errorf("response exceeds %d bytes", maxBody)}
 	}
 	switch {
 	case resp.StatusCode == http.StatusTooManyRequests:
@@ -211,7 +219,7 @@ func (p *HuggingFaceProvider) GenerateQuiz(ctx context.Context, req GenerateRequ
 	if err != nil {
 		return GeneratedQuiz{}, Usage{}, &ProviderError{Kind: KindInvalidResponse, Cause: err}
 	}
-	usage := Usage{Provider: p.Provider, Model: p.ModelName, Latency: time.Since(start)}
+	usage := Usage{Provider: providerLabel, Model: usageModel, Latency: time.Since(start)}
 	if cr.Usage != nil {
 		usage.InputTokens = cr.Usage.PromptTokens
 		usage.OutputTokens = cr.Usage.CompletionTokens

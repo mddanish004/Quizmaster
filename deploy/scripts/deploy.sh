@@ -45,6 +45,7 @@ PASSWORD_PEPPER="$(getp PASSWORD_PEPPER)"
 GOOGLE_CLIENT_ID="$(getp GOOGLE_CLIENT_ID)"
 GOOGLE_CLIENT_SECRET="$(getp GOOGLE_CLIENT_SECRET)"
 HF_TOKEN="$(getp HF_TOKEN)"
+GROQ_API_KEY="$(getp GROQ_API_KEY)"
 umask 077
 # Single-quote every value (escaping embedded quotes) so arbitrary secret
 # characters can never break shell sourcing of this file (S5-17).
@@ -59,6 +60,11 @@ sq() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
   printf 'GOOGLE_REDIRECT_URL=%s\n' "$(sq "https://$APP_DOMAIN/api/v1/auth/google/callback")"
   printf 'WS_ALLOWED_ORIGINS=%s\n' "$(sq "https://$APP_DOMAIN")"
   printf 'MAIL_PROVIDER=mock\nMOCK_AI=false\nMOCK_OIDC=false\nMOCK_MAIL=false\n'
+  # Staging uses the Groq free tier (no card, strict json_schema) until HF
+  # billing is funded (S5-26, ADR-015). HF remains the config default.
+  printf 'AI_PROVIDER=%s\n' "$(sq "groq")"
+  printf 'GROQ_API_KEY=%s\n' "$(sq "$GROQ_API_KEY")"
+  printf 'GROQ_MODEL=%s\n' "$(sq "openai/gpt-oss-120b")"
   printf 'DATABASE_URL=%s\n' "$(sq "$DATABASE_URL")"
   printf 'MIGRATIONS_DATABASE_URL=%s\n' "$(sq "$MIGRATIONS_DATABASE_URL")"
   printf 'CSRF_SECRET=%s\n' "$(sq "$CSRF_SECRET")"
@@ -98,8 +104,8 @@ aws ecr get-login-password --region "${AWS_REGION:-ap-southeast-1}" \
 
 export ECR_REGISTRY IMAGE_API_DIGEST="$API_DIGEST" IMAGE_WEB_DIGEST="$WEB_DIGEST"
 export AWS_REGION="${AWS_REGION:-ap-southeast-1}"
-export CW_LOG_GROUP_API="${CW_LOG_GROUP_API:-/quizforge/staging/api}"
-export CW_LOG_GROUP_WEB="${CW_LOG_GROUP_WEB:-/quizforge/staging/web}"
+export CW_LOG_GROUP_API="${CW_LOG_GROUP_API:-/quizforge-staging/api}"
+export CW_LOG_GROUP_WEB="${CW_LOG_GROUP_WEB:-/quizforge-staging/web}"
 
 # Non-secret release pointer (0644): consumed by compose + janitor timer.
 # NEVER write .env values here.

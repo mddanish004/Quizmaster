@@ -1,3 +1,11 @@
+## ADR-015: Groq Free Tier For Staging AI Generation
+
+**Status:** Accepted (Stage 5, 2026-10-14)
+**Decision:** Staging sets `AI_PROVIDER=groq` (Groq free tier, no card, OpenAI-compatible `https://api.groq.com/openai/v1`, model `openai/gpt-oss-120b` with strict `json_schema`). Hugging Face stays the config default and primary provider (HF-first architecture unchanged); staging overrides via environment only.
+**Why:** Live probe returned HF HTTP 402 "no remaining credits" on both `auto` and `:deepinfra` routes — the account's Inference Provider credits are exhausted and the operator requires zero-cost staging. Groq's free tier documents strict structured outputs on `gpt-oss` models and needs only an API key; the existing OpenAI-shaped adapter was shared (`doChatCompletion`) so the change is one small adapter + wiring.
+**Rejected:** Funding HF (paid, against operator constraint); silent mock (would fake the "real AI" smoke test); local tiny model on t4g.small (quality/cost of engineering worse than a hosted free tier).
+**Consequence:** New SSM secret `GROQ_API_KEY`; staging generation quality now depends on `openai/gpt-oss-120b` + Groq free-tier limits (30 RPM, daily caps — fine for smoke, not load); production still targets HF-funded routing. If Groq 400s on schema keywords (`pattern`/`const`), relax the Groq-side schema (server validation remains the gate).
+
 ## ADR-014: Vetted OIDC Library For Google Verification
 
 **Status:** Accepted (Stage 4)

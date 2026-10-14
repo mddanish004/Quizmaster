@@ -18,7 +18,7 @@ services:
     logging:
       driver: awslogs
       options:
-        awslogs-group: ${CW_LOG_GROUP_API:-/quizforge/staging/api}
+        awslogs-group: ${CW_LOG_GROUP_API:-/quizforge-staging/api}
         awslogs-region: ${AWS_REGION:-ap-southeast-1}
         tag: quizforge/api/{{.Name}}
         mode: non-blocking
@@ -51,7 +51,7 @@ services:
     logging:
       driver: awslogs
       options:
-        awslogs-group: ${CW_LOG_GROUP_WEB:-/quizforge/staging/web}
+        awslogs-group: ${CW_LOG_GROUP_WEB:-/quizforge-staging/web}
         awslogs-region: ${AWS_REGION:-ap-southeast-1}
         tag: quizforge/web/{{.Name}}
         mode: non-blocking
