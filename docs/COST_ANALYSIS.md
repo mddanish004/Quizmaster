@@ -27,7 +27,7 @@ dumps.
 
 ## Monthly Estimates
 
-| Scenario | Render | Neon | Hugging Face | Other | Estimated total |
+| Scenario | Render | Neon | Groq | Other | Estimated total |
 |---|---:|---:|---:|---:|---:|
 | Local dev/test | $0 | $0 on eligible free project | $0.10 credit then capped | $0 | $0 unless quotas exceeded |
 | Very low production | $0 (free tier, sleeps when idle) | $0–5 | $0–5 cap | domain ~$1–2/mo equivalent | **~$1–12** |
@@ -36,10 +36,10 @@ dumps.
 SMTP relays (Resend/Postmark/Gmail-class) typically have a free tier covering
 password-reset volumes; budget only if volume outgrows it.
 
-Hugging Face's free user credit is small and subject to change; the provider
-model determines pay-as-you-go cost. The app quotas (5 generations/user/day,
-circuit breaker, no unbounded fallback) bound spend, and manual quiz authoring
-is the zero-cost fallback.
+Groq's free tier carries request/throughput limits rather than a dollar
+balance; it resets on Groq's schedule and is ample for on-demand generation.
+The app quotas (5 generations/user/day, circuit breaker, no unbounded
+fallback) bound usage, and manual quiz authoring is the zero-cost fallback.
 
 ## Charge Controls
 
@@ -47,7 +47,7 @@ is the zero-cost fallback.
   a planned burst (vertical resize is the first lever).
 - Neon compute/storage limits and usage alerts; decide autosuspend vs
   always-on from measured wake latency.
-- HF token spend cap + application quotas; revoke/rotate on anomaly.
+- Groq key rotation on anomaly + application quotas (no dollar spend to cap on the free tier).
 - Tag nothing — there is no cloud inventory to tag. Record the Render service,
   Neon project/branch, and token owner in the status ledger instead.
 

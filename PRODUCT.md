@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-React with TypeScript, Vite, Tailwind CSS, React Router, TanStack Query, React Hook Form, Zod, Recharts, and WebSockets; Go modular-monolith backend; Neon PostgreSQL; Hugging Face Inference Providers; Docker; Render; GitHub Actions. The requester explicitly selected this stack.
+React with TypeScript, Vite, Tailwind CSS, React Router, TanStack Query, React Hook Form, Zod, Recharts, and WebSockets; Go modular-monolith backend; Neon PostgreSQL; Groq inference; Docker; Render; GitHub Actions. The requester explicitly selected this stack.
 
 ## Users
 
@@ -32,7 +32,7 @@ Creators work in a focused desktop editor and dashboard. Hosts typically present
 ## Capabilities and Constraints
 
 - Password and Google authentication are mandatory.
-- AI quiz generation uses Hugging Face first but must degrade honestly when quota or service is unavailable.
+- AI quiz generation uses Groq but must degrade honestly when quota or service is unavailable.
 - Multiple-choice is the MVP question type; true/false and multiple-correct are prioritized follow-ups.
 - Real-time participation, six-character join codes, guest identity, timers, scoring, leaderboards, reconnect, and durable recovery are core.
 - Go is the main backend language. React and Tailwind are required. Neon is the primary database.

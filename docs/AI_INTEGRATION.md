@@ -1,5 +1,11 @@
 # AI Integration
 
+> **Groq-only since 2026-10-14 (ADR-017).** Production uses `AI_PROVIDER=groq`
+> (`openai/gpt-oss-120b`, strict `json_schema`). The Hugging Face adapter and
+> its catalog notes below are retained as dormant code/history: HF is not
+> configured anywhere (`render.yaml`/`env` carry no `HF_*` values) and is
+> never called.
+
 ## Current External Constraints
 
 As of 2026-10-10, Hugging Face Inference Providers route chat-completion requests across multiple providers. Official pricing says free users receive **$0.10/month** in credits, subject to change, and extra use requires purchased credits; this is not an unlimited free inference tier. The API supports OpenAI-compatible chat completion and a `response_format` with strict JSON Schema where the selected provider/model supports it. Sources: [pricing](https://huggingface.co/docs/inference-providers/pricing), [chat completion](https://huggingface.co/docs/inference-providers/tasks/chat-completion), and [structured outputs](https://huggingface.co/docs/inference-providers/guides/structured-output).

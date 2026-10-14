@@ -2,14 +2,14 @@
 
 AI-built quizzes, played live. Creators register, generate or author a quiz, publish it, host a synchronized session, and guests join from their phones with a six-character code. Scores and leaderboards update in real time; results persist for review.
 
-> **What is verified (2026-10-11, local + containers):** full user journey against real PostgreSQL — register → login → AI-mock generate → edit → publish → host → join → answer → results → history. `go test ./...` green incl. `-race`; frontend `tsc`/`vitest` (17 tests)/`vite build` green; Playwright E2E **10/10 in real Chrome** vs dev backend **and** vs the containerized single-image build; Docker image builds (nonroot, serves API + SPA on one origin); migration up/down/up green; 200-participant load (p99 138 ms), 10×20, 15-min soak, kill-9 drill. **Not yet verified:** real Hugging Face, Google, Neon, Render deployment (no credentials here).
+> **What is verified (2026-10-11, local + containers):** full user journey against real PostgreSQL — register → login → AI-mock generate → edit → publish → host → join → answer → results → history. `go test ./...` green incl. `-race`; frontend `tsc`/`vitest` (17 tests)/`vite build` green; Playwright E2E **10/10 in real Chrome** vs dev backend **and** vs the containerized single-image build; Docker image builds (nonroot, serves API + SPA on one origin); migration up/down/up green; 200-participant load (p99 138 ms), 10×20, 15-min soak, kill-9 drill. **Not yet verified:** real Groq, Google, Neon, Render deployment (no credentials here).
 
 ## Architecture
 
 - **Frontend:** React 19 + TypeScript + Vite + Tailwind v4 + React Router + TanStack Query + RHF/Zod. Same-origin API client; auth from `/me`, never localStorage tokens.
 - **Backend:** Go modular monolith (Chi, pgx, `coder/websocket`). Handlers thin; services own transactions; PostgreSQL is the durable authority; in-process session actors only accelerate routing/timers.
 - **Data:** PostgreSQL (Neon in production, local Postgres for dev/test). Numbered up/down migrations.
-- **AI:** provider interface; Hugging Face OpenAI-compatible adapter first, strict schema + domain validation, bounded retries, quotas, usage records; deterministic mock for tests/demos (always labeled `mock`).
+- **AI:** provider interface; Groq OpenAI-compatible adapter, strict schema + domain validation, bounded retries, quotas, usage records; deterministic mock for tests/demos (always labeled `mock`).
 - **Auth:** opaque DB-backed sessions in `__Host-` Secure HttpOnly cookies; Argon2id; per-session CSRF + Origin checks; Google OIDC authorization-code + PKCE with explicit link policy (real verifier fails closed until a vetted JWKS library is vendored).
 - **Prod:** one Render web service (single Docker image: Go API + Vite SPA on one origin, TLS at the edge) + managed Neon Postgres; deploys via the `deploy` workflow (migrate → deploy hook → smoke).
 
@@ -17,7 +17,7 @@ AI-built quizzes, played live. Creators register, generate or author a quiz, pub
 flowchart LR
   Browser[React browser client] -->|HTTPS REST + WSS, single origin| Render[Render web service: Go + static UI]
   Render --> Neon[(PostgreSQL)]
-  Render --> HF[Hugging Face inference]
+  Render --> Groq[Groq inference]
   Render --> Google[Google OIDC]
   Render --> SMTP[SMTP relay]
 ```
@@ -74,7 +74,7 @@ Opaque sessions (revocable, logout-all) over JWTs; Argon2id 64MiB×3×p2 hashed 
 
 ## Known limitations
 
-- Real Hugging Face/Google/Neon/Render paths are implemented but **credential-required** (mock providers + fixture contracts used locally; Google verification now uses go-oidc with fake-issuer tests; production must still run the live smoke).
+- Real Groq/Google/Neon/Render paths are implemented but **credential-required** (mock providers + fixture contracts used locally; Google verification now uses go-oidc with fake-issuer tests; production must still run the live smoke).
 - The single Docker image serves API + SPA; `docker build -f backend/Dockerfile .` + `docker compose up --build` reproduces production locally (first Render deploy remains to be executed).
 - No second AI provider fallback; no CSV export; quiz duplication deferred; `sqlc` codegen not yet wired (handwritten parameterized pgx with reviewed SQL; config checked in).
 - Session `ip_prefix`/`user_agent_hash` recorded as NULL; email-verification gating deferred; janitor timer must still be scheduled on the host.

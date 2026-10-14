@@ -1,3 +1,11 @@
+## ADR-017: Groq-Only AI Generation (HF Retired)
+
+**Status:** Accepted (2026-10-14)
+**Decision:** Production uses Groq exclusively (`AI_PROVIDER=groq`, `openai/gpt-oss-120b`, strict `json_schema`). No `HF_*` values exist in `render.yaml`, `.env.example`, or the Render dashboard; the Hugging Face adapter stays in code as dormant (covered by contract tests) but is never selected.
+**Why:** Operator direction — single provider, zero HF spend/dependency; Groq's free tier covers on-demand generation and the app quotas bound usage regardless.
+**Rejected:** Dual-provider with HF fallback (extra spend surface and config for no product benefit at this scale).
+**Consequence:** If Groq has an outage, generation honestly 503s and manual authoring remains; re-adding a fallback needs an ADR.
+
 ## ADR-016: Render Single-Service Production (AWS Retirement)
 
 **Status:** Accepted (2026-10-14)

@@ -5,7 +5,7 @@
 One Render **web service** runs the single Docker image (`backend/Dockerfile`):
 the Go binary serves `/api/*`, `/ws/*`, `/health/*`, `/version`, and the Vite
 SPA from `/srv` — UI and API share one origin, so there is no CORS and cookies
-stay `SameSite=Lax`. Managed **Neon Postgres** is the database; Hugging Face,
+stay `SameSite=Lax`. Managed **Neon Postgres** is the database; Groq,
 Google, and an SMTP relay are external services. No host to SSH into, no
 reverse proxy, no container orchestrator to operate.
 
@@ -13,7 +13,7 @@ reverse proxy, no container orchestrator to operate.
 flowchart LR
   Browser[React SPA + WS client] -->|HTTPS REST + WSS, single origin| Render[Render web service: Go + static UI]
   Render --> Neon[(Neon PostgreSQL)]
-  Render --> HF[Hugging Face inference]
+  Render --> Groq[Groq inference]
   Render --> Google[Google OIDC]
   Render --> SMTP[SMTP relay]
 ```
@@ -22,7 +22,7 @@ flowchart LR
 |---|---|---|---|
 | local | `vite dev` + `go run`, or `docker compose up --build` | local Postgres / Neon dev branch | mock AI/OIDC/mail by default |
 | CI | GitHub Actions (Go tests, frontend checks, contract) | Postgres 18 service | mocks only |
-| production | one Render web service (free tier; `starter` when no-sleep is needed) | Neon production project | Google prod client, capped HF token, SMTP relay |
+| production | one Render web service (free tier; `starter` when no-sleep is needed) | Neon production project | Google prod client, Groq free-tier key, SMTP relay |
 
 The free tier sleeps after ~15 min without traffic and wakes in ~60 s on the
 next visit. That is fine for portfolio/demo use: open the URL a minute before
@@ -49,7 +49,7 @@ so the deploy workflow — not Render — decides when a release ships, and
 
 GitHub secrets for `deploy`: `MIGRATIONS_DATABASE_URL`, `RENDER_DEPLOY_HOOK_URL`,
 `RENDER_APP_URL`. Render-side config lives in `render.yaml` (non-secrets) plus
-dashboard values for every `sync: false` entry (database URL, Google, HF, SMTP).
+dashboard values for every `sync: false` entry (database URL, Google, Groq, SMTP).
 
 ## First-Time Setup
 
@@ -60,8 +60,10 @@ dashboard values for every `sync: false` entry (database URL, Google, HF, SMTP).
    equal the service URL exactly (no trailing slash).
 3. **Google** — OAuth client with redirect
    `https://<service>/api/v1/auth/google/callback` registered exactly.
-4. **Hugging Face** — capped token; verify the model still offers strict JSON
-   Schema. App quotas (`AI_DAILY_USER_LIMIT=5`) bound spend regardless.
+4. **Groq** — free-tier API key from console.groq.com; model
+   `openai/gpt-oss-120b` with strict `json_schema` (already the code default).
+   Free-tier rate limits apply (fine for generation-on-demand, not bulk).
+   App quotas (`AI_DAILY_USER_LIMIT=5`) bound usage regardless.
 5. **SMTP** — any relay; set `MAIL_PROVIDER=smtp`, `SMTP_ADDR` (`host:587`),
    credentials, and a verified `MAIL_FROM`.
 6. **Retention janitor** — Render cron job, command `/quizforge janitor`, same
@@ -107,7 +109,7 @@ mitigation, verification, follow-up.
 - `APP_ORIGIN`/`WS_ALLOWED_ORIGINS`/`GOOGLE_REDIRECT_URL` exactly match the
   Render URL; `CSRF_SECRET` ≥ 32 chars; production `DATABASE_URL` requires TLS.
 - Migrations + restore drill pass; janitor cron scheduled; spend caps set
-  (Render plan, HF token, Neon limits).
+  (Render plan, Groq limits, Neon limits).
 - Two-browser live smoke incl. mid-question refresh; headers scanned
   (CSP/HSTS come from Render edge + the app's `SecurityHeaders`).
 - Argon2 stays at the secure baseline (64 MiB × 3 × p2); calibrate only with

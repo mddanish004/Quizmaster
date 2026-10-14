@@ -2,7 +2,7 @@
 
 ## Decision Summary
 
-Build one stateless-at-the-process-boundary Go modular monolith with an in-process WebSocket hub and per-session actor goroutines. PostgreSQL is the durable source of truth; memory accelerates routing and timers but is never the only copy of live state. React is compiled to static assets and served by the Go binary from the same image. One Render web service runs UI + API on a single origin; Neon, Hugging Face, Google, and an SMTP relay remain managed external dependencies.
+Build one stateless-at-the-process-boundary Go modular monolith with an in-process WebSocket hub and per-session actor goroutines. PostgreSQL is the durable source of truth; memory accelerates routing and timers but is never the only copy of live state. React is compiled to static assets and served by the Go binary from the same image. One Render web service runs UI + API on a single origin; Neon, Groq, Google, and an SMTP relay remain managed external dependencies.
 
 ## Context Diagram
 
@@ -17,7 +17,7 @@ flowchart TB
   AI[AI orchestration module]
   DB[(Neon PostgreSQL)]
   Google[Google OIDC]
-  HF[Hugging Face Inference Providers]
+  Groq[Groq inference]
   SMTP[SMTP relay]
 
   Creator -->|HTTPS / WSS| Render
@@ -32,7 +32,7 @@ flowchart TB
   AI --> DB
   Auth --> Google
   Auth --> SMTP
-  AI --> HF
+  AI --> Groq
 ```
 
 ## Deployment Topology
@@ -41,7 +41,7 @@ flowchart TB
 flowchart LR
   Internet --> Render[Render web service: Go API + static SPA]
   Render -->|TLS pooled runtime| Neon[(Neon)]
-  Render -->|HTTPS| HF[HF router]
+  Render -->|HTTPS| Groq[Groq API]
   Render -->|OIDC| Google[Google]
   Render -->|SMTP| SMTP[Mail relay]
   GHA[GitHub Actions: migrate, then deploy hook] --> Render
@@ -108,15 +108,15 @@ sequenceDiagram
   participant UI as Generator UI
   participant API as Go AI service
   participant DB as PostgreSQL
-  participant HF as Hugging Face
+  participant Groq as Groq
   UI->>API: POST brief + Idempotency-Key
   API->>DB: reserve generation record / enforce quota
-  API->>HF: chat completion + strict JSON Schema
-  HF-->>API: structured JSON or error
+  API->>Groq: chat completion + strict JSON Schema
+  Groq-->>API: structured JSON or error
   API->>API: parse, schema + domain + quality validation
   alt retryable invalid/provider failure
-    API->>HF: one corrective retry with bounded backoff
-    HF-->>API: corrected output
+    API->>Groq: one corrective retry with bounded backoff
+    Groq-->>API: corrected output
   end
   alt valid
     API->>DB: transaction: quiz + questions + options + usage
@@ -160,7 +160,7 @@ Configuration loads once from environment into a typed struct, validates cross-f
 - Prometheus-compatible `/metrics` bound to loopback or protected network; begin with embedded metrics logs and Render's own CPU/memory graphs.
 - Metrics: HTTP latency/errors, DB pool, active sockets/sessions, command latency/conflicts, answer outcome, broadcast drops, AI calls/latency/schema failures, auth outcomes/rate limits.
 - Traces are optional after metrics/logs; OpenTelemetry instrumentation must not block MVP.
-- Liveness proves process/event-loop health. Readiness performs a short DB ping and migration-version check, but not Hugging Face/Google availability.
+- Liveness proves process/event-loop health. Readiness performs a short DB ping and migration-version check, but not Groq/Google availability.
 
 ## Scaling Path
 
@@ -171,7 +171,7 @@ Vertical scale is first: a larger Render plan, DB pool tuning, query analysis, a
 | Failure | User behavior | System behavior |
 |---|---|---|
 | Neon wakes from idle | brief retry/loading | bounded connection/query timeout; retry only safe reads/transactions before effects |
-| Hugging Face 429/outage | preserve prompt; offer retry/manual | one bounded retry where allowed; circuit breaker; `503 AI_UNAVAILABLE` |
+| Groq 429/outage | preserve prompt; offer retry/manual | one bounded retry where allowed; circuit breaker; `503 AI_UNAVAILABLE` |
 | Host disconnects | participants finish current timer and wait | state remains; automatic close proceeds; no automatic advance |
 | Participant disconnects | reconnect banner, then snapshot | answer and identity persist; no duplicate score |
 | API restart | clients reconnect | active states/timers loaded from DB; overdue question closes once |

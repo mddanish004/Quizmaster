@@ -10,7 +10,7 @@ These rules are mandatory for every implementation agent working in this reposit
 
 ## Architecture Constraints
 
-- Keep a Go modular monolith, React/Vite frontend, Neon PostgreSQL, Hugging Face-first AI provider, REST resources, and WebSocket live protocol.
+- Keep a Go modular monolith, React/Vite frontend, Neon PostgreSQL, Groq AI provider, REST resources, and WebSocket live protocol.
 - Use Chi, `pgx`, and `sqlc` unless a new accepted ADR changes the choice.
 - PostgreSQL is the durable authority. In-memory actors/timers/caches may accelerate behavior but must recover from persisted state.
 - Use opaque database-backed cookie sessions. Do not substitute JWTs, Firebase/Auth0, or another auth system.

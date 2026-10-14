@@ -324,6 +324,18 @@ Last updated: 2026-10-11 (Stage 3 production-readiness validation).
     credential-required.
 - Next: push a `v*` tag and follow `docs/DEPLOYMENT.md`.
 
+### Stage 6.1 - Groq-Only AI, Render Free Tier (2026-10-14, worktree /home/mddanish/quiz)
+
+- `render.yaml` → `plan: free` (+ docs/cost/ADR-016 updated; very-low estimate
+  now ~$1–12/mo). `AI_PROVIDER=groq` + `GROQ_MODEL=openai/gpt-oss-120b`;
+  `HF_*` removed from `render.yaml`/`.env.example`; `MOCK_AI/MOCK_OIDC/MOCK_MAIL`
+  pinned `false` in the blueprint (code defaults are true — without this,
+  production silently runs all three fakes). ADR-017 recorded; HF adapter
+  dormant in code, never selected.
+- Operator action (dashboard, not repo): set `MOCK_AI/MOCK_OIDC/MOCK_MAIL=false`,
+  `AI_PROVIDER=groq`, `GROQ_API_KEY`, fix `APP_ORIGIN` exact-match (was causing
+  CSRF 403s on all writes), then Save + redeploy.
+
 ## Phase Update Template
 
 ```markdown

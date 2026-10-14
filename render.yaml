@@ -41,11 +41,19 @@ services:
       - key: GOOGLE_REDIRECT_URL
         value: https://quizforge.onrender.com/api/v1/auth/google/callback
       - key: AI_PROVIDER
-        value: huggingface
-      - key: HF_TOKEN
+        value: groq
+      - key: GROQ_API_KEY
         sync: false
-      - key: HF_MODEL
-        value: Qwen/Qwen3-32B
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      # Mock switches default to true in code — production must pin all
+      # three to false, or AI/OIDC/mail silently run as fakes.
+      - key: MOCK_AI
+        value: "false"
+      - key: MOCK_OIDC
+        value: "false"
+      - key: MOCK_MAIL
+        value: "false"
       - key: MAIL_PROVIDER
         value: smtp
       - key: MAIL_FROM
