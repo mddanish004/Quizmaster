@@ -39,6 +39,7 @@ if [ "${1:-}" = "ssm" ] && [ "${2:-}" = "get-parameter" ]; then
     GOOGLE_CLIENT_ID) printf '%s' 'google-client-id' ;;
     GOOGLE_CLIENT_SECRET) printf '%s' 'google-client-secret' ;;
     HF_TOKEN) printf '%s' 'hf_test-token' ;;
+    GROQ_API_KEY) printf '%s' 'groq_test-key' ;;
     *) exit 2 ;;
   esac
 elif [ "${1:-}" = "ecr" ] && [ "${2:-}" = "get-login-password" ]; then
@@ -94,6 +95,9 @@ set -a; . "$TEST_DIR/deploy/.env"; set +a
 test "$APP_DOMAIN" = 'quiz.example.com'
 test "$MIGRATIONS_DATABASE_URL" = 'postgresql://migrator:p@ss(word)@db.example.com/app?sslmode=require'
 test "$PASSWORD_PEPPER" = "pepper'with-quote"
+test "$AI_PROVIDER" = 'groq'
+test "$GROQ_API_KEY" = 'groq_test-key'
+test "$GROQ_MODEL" = 'openai/gpt-oss-120b'
 test "$(stat -c %a "$TEST_DIR/deploy/.env")" = '600'
 
 python3 - "$TEST_DIR/docker.args" <<'PY'
