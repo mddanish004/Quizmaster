@@ -2,7 +2,7 @@
 
 AI-built quizzes, played live. Creators register, generate or author a quiz, publish it, host a synchronized session, and guests join from their phones with a six-character code. Scores and leaderboards update in real time; results persist for review.
 
-> **What is verified (2026-10-11, local + containers):** full user journey against real PostgreSQL — register → login → AI-mock generate → edit → publish → host → join → answer → results → history. `go test ./...` green incl. `-race`; frontend `tsc`/`vitest` (17 tests)/`vite build` green; Playwright E2E **10/10 in real Chrome** vs dev backend **and** vs containerized prod builds (Caddy + prod images); Docker images built (api 25.6 MB nonroot, web 93.4 MB), Caddy `Valid configuration`, ARM64 boots; migration up/down/up green; 200-participant load (p99 138 ms), 10×20, 15-min soak, kill-9 drill. **Not yet verified:** real Hugging Face, Google, Neon, AWS deployment (no credentials here).
+> **What is verified (2026-10-11, local + containers):** full user journey against real PostgreSQL — register → login → AI-mock generate → edit → publish → host → join → answer → results → history. `go test ./...` green incl. `-race`; frontend `tsc`/`vitest` (17 tests)/`vite build` green; Playwright E2E **10/10 in real Chrome** vs dev backend **and** vs the containerized single-image build; Docker image builds (nonroot, serves API + SPA on one origin); migration up/down/up green; 200-participant load (p99 138 ms), 10×20, 15-min soak, kill-9 drill. **Not yet verified:** real Hugging Face, Google, Neon, Render deployment (no credentials here).
 
 ## Architecture
 
@@ -11,15 +11,15 @@ AI-built quizzes, played live. Creators register, generate or author a quiz, pub
 - **Data:** PostgreSQL (Neon in production, local Postgres for dev/test). Numbered up/down migrations.
 - **AI:** provider interface; Hugging Face OpenAI-compatible adapter first, strict schema + domain validation, bounded retries, quotas, usage records; deterministic mock for tests/demos (always labeled `mock`).
 - **Auth:** opaque DB-backed sessions in `__Host-` Secure HttpOnly cookies; Argon2id; per-session CSRF + Origin checks; Google OIDC authorization-code + PKCE with explicit link policy (real verifier fails closed until a vetted JWKS library is vendored).
-- **Prod:** one ARM64 EC2 (`ap-southeast-1`) + Caddy (TLS, static UI, reverse proxy) + Docker Compose; GitHub OIDC CI/CD; SSM secrets; Neon Singapore.
+- **Prod:** one Render web service (single Docker image: Go API + Vite SPA on one origin, TLS at the edge) + managed Neon Postgres; deploys via the `deploy` workflow (migrate → deploy hook → smoke).
 
 ```mermaid
 flowchart LR
-  Browser[React browser client] -->|HTTPS REST + WSS| Caddy[Caddy reverse proxy]
-  Caddy --> API[Go modular monolith]
-  API --> Neon[(PostgreSQL)]
-  API --> HF[Hugging Face inference]
-  API --> Google[Google OIDC]
+  Browser[React browser client] -->|HTTPS REST + WSS, single origin| Render[Render web service: Go + static UI]
+  Render --> Neon[(PostgreSQL)]
+  Render --> HF[Hugging Face inference]
+  Render --> Google[Google OIDC]
+  Render --> SMTP[SMTP relay]
 ```
 
 ## Quickstart (local)
@@ -74,8 +74,8 @@ Opaque sessions (revocable, logout-all) over JWTs; Argon2id 64MiB×3×p2 hashed 
 
 ## Known limitations
 
-- Real Hugging Face/Google/Neon/AWS paths are implemented but **credential-required** (mock providers + fixture contracts used locally; Google verification now uses go-oidc with fake-issuer tests; staging must still run the live smoke).
-- Docker images build and run locally (amd64 verified, ARM64 emulated); production `docker compose up` on EC2 remains to be executed.
+- Real Hugging Face/Google/Neon/Render paths are implemented but **credential-required** (mock providers + fixture contracts used locally; Google verification now uses go-oidc with fake-issuer tests; production must still run the live smoke).
+- The single Docker image serves API + SPA; `docker build -f backend/Dockerfile .` + `docker compose up --build` reproduces production locally (first Render deploy remains to be executed).
 - No second AI provider fallback; no CSV export; quiz duplication deferred; `sqlc` codegen not yet wired (handwritten parameterized pgx with reviewed SQL; config checked in).
 - Session `ip_prefix`/`user_agent_hash` recorded as NULL; email-verification gating deferred; janitor timer must still be scheduled on the host.
 
@@ -85,7 +85,7 @@ Opaque sessions (revocable, logout-all) over JWTs; Argon2id 64MiB×3×p2 hashed 
 
 ## Interview talking points
 
-Commits precede broadcasts; immutable session snapshots; uniqueness + `expectedVersion` + row locks stop double scores and stale hosts; timers are persisted deadlines with idempotent closes; opaque sessions beat JWTs here (revocation, OAuth linking); single EC2 over Lambda for native WebSockets and one deployable; mock/real provider honesty (never silent fallback).
+Commits precede broadcasts; immutable session snapshots; uniqueness + `expectedVersion` + row locks stop double scores and stale hosts; timers are persisted deadlines with idempotent closes; opaque sessions beat JWTs here (revocation, OAuth linking); single Render service over separate frontend/backend hosts (one origin: no CORS, Lax cookies, one deployable); mock/real provider honesty (never silent fallback).
 
 ## License
 

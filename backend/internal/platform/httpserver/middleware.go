@@ -52,12 +52,19 @@ func Recover(next http.Handler) http.Handler {
 	})
 }
 
-// SecurityHeaders sets baseline headers; CSP is completed in Caddy per AUTH_SECURITY.
+// SecurityHeaders sets baseline headers. The API serves them directly (there
+// is no reverse proxy in front of Render), and the same process also serves
+// the SPA in production — so this is the single place enforcing the policy
+// the old Caddyfile used to own.
 func SecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin-allow-popups")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com")
 		next.ServeHTTP(w, r)
 	})
 }

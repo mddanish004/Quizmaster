@@ -1,3 +1,11 @@
+## ADR-016: Render Single-Service Production (AWS Retirement)
+
+**Status:** Accepted (2026-10-14)
+**Decision:** Production is one Render web service running a single Docker image in which the Go binary serves the API **and** the Vite SPA on one origin, plus managed Neon Postgres. All AWS artifacts are removed: OpenTofu IaC, EC2/ECR/SSM/CloudWatch/S3/SES, the Caddy reverse proxy, the split api/web images, and the SSM deploy driver. Releases are `v*` tags; the `deploy` workflow runs migrations (pinned `migrate/migrate` image, direct Neon URL) **before** POSTing the Render deploy hook (`autoDeploy: false`), then smoke-checks `/health/ready` + `/version`. Password-reset mail moves from the never-implemented SES plan to a generic stdlib SMTP relay (`MAIL_PROVIDER=smtp`, `SMTP_*` env). Security headers (CSP/HSTS) moved from the Caddyfile into the Go `SecurityHeaders` middleware.
+**Why:** One origin preserves the simplest cookie/CSRF posture (no CORS, `SameSite=Lax`, exact-Origin checks unchanged); one image + one service removes the EC2 host, ECR, SSM secret plumbing, and Caddy as operational surface while keeping native WebSockets and in-process live actors untouched.
+**Rejected:** Render backend + Vercel frontend split (adds CORS, cross-site cookies, two deploy targets for no product benefit); keeping EC2 (host patching, IAM/SSM plumbing, ~$22–28/mo base for a portfolio workload).
+**Consequence:** Render `starter` minimum (free sleeps and kills WebSockets); DB migrations are CI-driven rather than host-driven; historical Stage 4/5 docs still describe the AWS era and are kept as records only.
+
 ## ADR-015: Groq Free Tier For Staging AI Generation
 
 **Status:** Accepted (Stage 5, 2026-10-14)

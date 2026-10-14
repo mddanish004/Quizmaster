@@ -247,6 +247,83 @@ Last updated: 2026-10-11 (Stage 3 production-readiness validation).
 - Blocked: Gate B approval → plan/apply, secrets, DNS, tag release, staging E2E/ZAP.
 - Next: operator reviews `INFRASTRUCTURE_REVIEW.md` + plan output, then approves apply.
 
+### Stage 5 - Live Deployment Troubleshooting (2026-10-13, worktree /home/mddanish/quiz)
+
+- Outcome: diagnosed the `deploy-prod` migration failure after `v0.2.5`; fixed
+  SSM parameter capture locally. The live deployment is not yet verified.
+- Root cause: `getp` was invoked by command substitution and wrote its safe
+  `[env] got NAME (...)` diagnostic to stdout along with the value. This
+  prefixed `MIGRATIONS_DATABASE_URL`, so golang-migrate parsed the diagnostic as
+  the driver and the `postgresql:` → `postgres:` normalization did not match.
+- Fix: send `getp` diagnostics to stderr and keep stdout value-only; retain
+  single-quoted `.env` materialization and mode 0600. The systemd output path is
+  configurable for isolated testing and remains `/etc/systemd/system` by
+  default. The release workflow now runs the syntax and regression tests before
+  authenticating to AWS or building images.
+- Mocked verification: `bash deploy/scripts/deploy_test.sh` — PASS. The test
+  uses fake SSM/ECR/host commands and verifies exact values (including `(` and
+  an embedded quote), `.env` mode 0600, absence of diagnostic leakage, and the
+  normalized `postgres://` URL supplied to the migration container.
+- Verified static check: `bash -n deploy/scripts/deploy.sh
+  deploy/scripts/deploy_test.sh` — PASS.
+- Remaining: ship under a new immutable tag (expected `v0.2.6`), approve the
+  production environment, then verify migration, readiness/version, logs, and
+  the core browser smoke flow. AWS/Neon execution remains credential-required
+  from this worktree.
+
+### Stage 6 - Render Pivot: AWS Retirement, Single-Service Production (2026-10-14, worktree /home/mddanish/quiz)
+
+- Outcome: all AWS-specific production machinery removed; the project now
+  deploys as one Render web service (single Docker image, Go serves API + SPA
+  on one origin) + Neon Postgres. No EC2/ECR/SSM/Caddy/SES remains in code,
+  config, workflows, or operational docs.
+- Deleted: `deploy/opentofu/`, `deploy/caddy/`, `deploy/compose.prod.yaml`,
+  `deploy/scripts/deploy.sh` + `deploy_test.sh`, `frontend/Dockerfile`,
+  `docs/AWS_SETUP_GUIDE.md`, `docs/INFRASTRUCTURE_REVIEW.md`,
+  `docs/CODEX_HANDOFF.md` (obsolete AWS troubleshooting handoff).
+- Added/changed:
+  - `backend/Dockerfile`: single image (node build → go build → distroless
+    + `/srv` SPA, `STATIC_DIR=/srv`); `frontend/Dockerfile` removed.
+  - `backend/internal/platform/httpserver/static.go` (+ tests): SPA serving
+    with index.html fallback, immutable `/assets` caching, no-store shell;
+    wired via `Deps.StaticDir` / `STATIC_DIR` env (empty in local dev).
+  - `SecurityHeaders` middleware now owns the CSP/HSTS/COOP policy the
+    Caddyfile used to enforce (verified by existing + new tests).
+  - `config`: dropped `AWS_REGION` + unused `APP_DOMAIN`; added
+    `MAIL_PROVIDER=mock|smtp` validation with `SMTP_ADDR/USERNAME/PASSWORD`
+    (stdlib STARTTLS relay; SES was never implemented); `PORT` env overrides
+    `HTTP_ADDR` for Render.
+  - `backend/internal/auth/smtp_mailer.go` (+ tests): message builder +
+    envelope parsing unit-tested; wired in `routes.go` when
+    `MAIL_PROVIDER=smtp` and not `MOCK_MAIL`.
+  - `render.yaml` blueprint (single service, `autoDeploy: false`,
+    `/health/ready` gate, `starter` plan floor).
+  - `.github/workflows/deploy.yml` rewritten: migrate (pinned
+    `migrate/migrate` image, direct Neon URL, scheme-normalized) → Render
+    deploy hook → readiness/version smoke. No AWS credentials anywhere.
+  - `compose.yaml`/`compose.override.yaml`: single `api` service (the image
+    serves the UI); `deploy/scripts/backup.sh` is now host-independent
+    `pg_dump`; `ROLLBACK.md` rewritten for Render.
+  - Docs: `DEPLOYMENT.md` + `COST_ANALYSIS.md` rewritten for Render;
+    `SYSTEM_ARCHITECTURE.md` diagrams/prose, `AUTH_SECURITY.md` (SES/Caddy/SSM
+    refs), `README.md`, `PRODUCT.md` updated; ADR-016 recorded above.
+- Verified (executed 2026-10-14, current revision):
+  - `gofmt -l` empty; `go vet ./...` clean; `go test -count=1 ./...` 8/8 ok
+    (per-package test DBs, same as CI); `-race` clean on auth + platform;
+    `govulncheck`: 0 vulnerabilities in code.
+  - Frontend: `tsc --noEmit` clean, `vitest` 17/17, `vite build` ok.
+  - `docker compose config` OK; `deploy.yml`/`ci.yml`/`render.yaml`
+    `yaml.safe_load` OK; `backup.sh` `bash -n` OK; `openapi_check` 29 paths OK.
+  - Runtime smoke (built binary + `STATIC_DIR=frontend/dist`, dev DB): `/`
+    200 shell, `/app/quizzes` 200 fallback, `/assets/*.js` 200 immutable +
+    HEAD 200, CSP/HSTS/CSP headers present, `/health/ready` 200,
+    `/version` ok, register 201. HEAD-405 found during smoke → fixed
+    (`r.Head` registered) with regression test.
+  - Docker image build NOT RUN (no daemon in this environment); first Render
+    deploy + Neon prod + Google/HF/SMTP + restore drill remain
+    credential-required.
+- Next: push a `v*` tag and follow `docs/DEPLOYMENT.md`.
+
 ## Phase Update Template
 
 ```markdown

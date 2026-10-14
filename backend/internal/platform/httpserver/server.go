@@ -18,6 +18,9 @@ type Deps struct {
 	ReadyCheck  func(ctx context.Context) error
 	ExtraRoutes func(r chi.Router)
 	RootRoutes  func(r chi.Router)
+	// StaticDir serves the built SPA (Vite dist) with index.html fallback
+	// when set. Empty in local development, where `vite dev` serves the UI.
+	StaticDir string
 }
 
 // NewRouter builds the base router with middleware and health/version endpoints.
@@ -52,6 +55,9 @@ func NewRouter(d Deps) http.Handler {
 	}
 	if d.RootRoutes != nil {
 		d.RootRoutes(r)
+	}
+	if d.StaticDir != "" {
+		ServeSPA(r, d.StaticDir)
 	}
 	return r
 }

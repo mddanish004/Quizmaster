@@ -1,3 +1,6 @@
+# Local development: one service builds the production image (API + SPA).
+# The UI is served from the image; `vite dev` (npm run dev) is only needed
+# for hot-reload frontend work, proxying /api + /ws to this service.
 services:
   api:
     build:
@@ -16,26 +19,3 @@ services:
       timeout: 3s
       retries: 3
       start_period: 10s
-    networks: [app]
-
-  web:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-    depends_on:
-      api: { condition: service_healthy }
-    ports: ["80:80", "443:443"]
-    volumes:
-      - caddy_data:/data
-      - caddy_config:/config
-    restart: unless-stopped
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
-    cap_add: [NET_BIND_SERVICE]
-    networks: [app]
-
-networks:
-  app: {}
-volumes:
-  caddy_data: {}
-  caddy_config: {}

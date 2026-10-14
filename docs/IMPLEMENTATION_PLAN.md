@@ -33,7 +33,8 @@ quizforge-ai/
 |   +-- go.mod
 |   `-- go.sum
 +-- database/migrations/
-+-- deploy/{caddy,compose,scripts,opentofu}/
++-- deploy/scripts/{backup.sh,ROLLBACK.md}
++-- render.yaml
 +-- docs/
 +-- scripts/
 +-- test/load/
@@ -281,6 +282,12 @@ make security
 **Deliverable:** release candidate and evidence bundle.
 
 ### Phase 8 - Deployment
+
+> **Superseded 2026-10-14 (ADR-016):** the AWS production target below was
+> retired before any production cutover. Production is one Render web service
+> (single Docker image, `render.yaml` blueprint) + Neon Postgres, deployed by
+> the `deploy` workflow (migrate → deploy hook → smoke); mail is generic SMTP.
+> The AWS tasks remain as the record of what was prepared, not what ships.
 
 **Objective:** reproducible AWS production deployment with safe CI/CD and operations.
 

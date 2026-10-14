@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-React with TypeScript, Vite, Tailwind CSS, React Router, TanStack Query, React Hook Form, Zod, Recharts, and WebSockets; Go modular-monolith backend; Neon PostgreSQL; Hugging Face Inference Providers; Docker; AWS; GitHub Actions. The requester explicitly selected this stack.
+React with TypeScript, Vite, Tailwind CSS, React Router, TanStack Query, React Hook Form, Zod, Recharts, and WebSockets; Go modular-monolith backend; Neon PostgreSQL; Hugging Face Inference Providers; Docker; Render; GitHub Actions. The requester explicitly selected this stack.
 
 ## Users
 
@@ -27,7 +27,7 @@ The product combines inspectable AI generation with a deliberately modest, durab
 
 ## Operating Context
 
-Creators work in a focused desktop editor and dashboard. Hosts typically present to a room or remote call. Participants use a second screen, most commonly a phone. Development is incremental by one solo developer, local services are containerized, Neon and AI inference remain managed services, and production runs within a modest AWS budget.
+Creators work in a focused desktop editor and dashboard. Hosts typically present to a room or remote call. Participants use a second screen, most commonly a phone. Development is incremental by one solo developer, local services are containerized, Neon and AI inference remain managed services, and production runs on Render within a modest budget.
 
 ## Capabilities and Constraints
 

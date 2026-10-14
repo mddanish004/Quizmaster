@@ -1,21 +1,28 @@
 # Rollback
 
-Migrations must be backward compatible (expand/migrate/contract). Rollback never
-reverses a migration automatically.
+Production is one Render web service (single Docker image serving UI + API)
+plus managed Neon Postgres. There is no host to SSH into. Every release is an
+immutable git tag (`v*`), so rollback is redeploy, not repair.
 
-1. Read the previous digests:
-   `cat /opt/quizforge/previous.env` (written by `deploy.sh` before switching).
-2. Re-run the deploy driver with previous digests:
-   `DEPLOY_DIR=/opt/quizforge ./deploy/scripts/deploy.sh <prev-api-digest> <prev-web-digest>`
-   Skip the migration step only if the failed deploy never migrated; otherwise the
-   old image must tolerate the new schema (backward-compatibility requirement).
-3. Verify `/health/ready`, `/version` (expect previous commit), and one live
-   question with two browsers.
-4. If the database itself needs recovery, restore into a **new Neon branch**,
-   verify row counts plus one sample session reconstruction, then point
-   `MIGRATIONS_DATABASE_URL`/`DATABASE_URL` at the restored branch. Never
-   restore over production in place without a snapshot.
-5. Record commit, migration version, checks, duration, and result in
-   `docs/IMPLEMENTATION_STATUS.md`.
+## App rollback (Render)
 
-Target RTO 4h, RPO 24h (measured drill replaces these targets).
+1. Open the Render dashboard → the `quizforge` service → **Deploys**.
+2. Find the last good deploy and hit **Rollback** (re-boots the previous
+   image with the current env). No data migration is involved.
+3. Verify: `curl $APP/health/ready` → 200, `curl $APP/version` shows the
+   previous tag, then run the core smoke (login → open a quiz → join code).
+
+## Database rollback
+
+Migrations are forward-only in the deploy path. To step back one migration
+after a bad `up`:
+
+```bash
+export MIGRATIONS_DATABASE_URL='postgres://…direct Neon URL…'
+docker run --rm -v "$PWD/database/migrations:/migrations:ro" \
+  migrate/migrate:v4.18.3 -path /migrations -database "$MIGRATIONS_DATABASE_URL" down 1
+```
+
+Rules: take a backup first (`deploy/scripts/backup.sh`), never edit an
+applied migration, and confirm `down`/`up` on a disposable copy when the
+migration touches live tables.

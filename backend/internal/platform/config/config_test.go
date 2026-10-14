@@ -5,7 +5,7 @@ import (
 )
 
 func TestValidateEnv(t *testing.T) {
-	c := &Config{Env: "development", Origin: "http://localhost:5173", LogLevel: "info", DBMaxConns: 10, AIMaxInFlight: 4}
+	c := &Config{Env: "development", Origin: "http://localhost:5173", LogLevel: "info", DBMaxConns: 10, AIMaxInFlight: 4, MailProvider: "mock"}
 	if err := c.Validate(); err != nil {
 		t.Fatalf("valid config rejected: %v", err)
 	}

@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-// Mailer sends account emails. Production uses SES; local/test uses mock.
+// Mailer sends account emails. Production uses SMTP; local/test uses mock.
 type Mailer interface {
 	SendPasswordReset(ctx context.Context, to, resetLink string) error
 }

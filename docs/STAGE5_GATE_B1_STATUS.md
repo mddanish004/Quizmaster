@@ -151,8 +151,13 @@ release → ECR → SSM → Neon → bucket empty+delete. Full runbook:
 `…:role/quizforge-staging-github-deploy`, bucket
 `quizforge-staging-backups-20261012144502463400000001`, log groups
 `/quizforge-staging/{api,web,host}`, SSM `/quizforge/staging/` (operator-uploaded 2026-10-12).
-Spend now active (~$21/mo idle base). Remaining: SNS confirm → manual `quizzy`
-A record → GitHub secrets → `v*` tag → live smoke.
+Spend now active (~$21/mo idle base). Trust-fix `tofu apply "trust.plan"`
+succeeded 2026-10-12 (0 add / 1 change / 0 destroy): deploy role allows
+numeric-ID + legacy OIDC subjects and `sts:TagSession`.
+Remaining: SNS confirm → manual `quizzy` A record (done, resolves) → GitHub
+secrets (set) → **`v0.2.7` GREEN 2026-10-13** (`deploy-prod` successful:
+migrate ok, containers Healthy, janitor installed, readiness gate passed) →
+live smoke in progress.
 
 (a) `tofu init/plan/apply` for staging (≈ 30 resources, ~$22–28/mo base);
 (b) creating the Route 53 A record if the zone is in Route 53 (else you create it

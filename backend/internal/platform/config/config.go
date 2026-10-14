@@ -16,7 +16,6 @@ import (
 type Config struct {
 	Env             string
 	Origin          string
-	Domain          string
 	HTTPAddr        string
 	LogLevel        string
 	LogFormat       string
@@ -36,8 +35,8 @@ type Config struct {
 	CSRFSecret            string
 	PasswordPepper        string
 
-	// TrustedProxies are CIDRs allowed to set X-Forwarded-For (Caddy/Docker
-	// networks). Direct clients' forwarding headers are ignored.
+	// TrustedProxies are CIDRs allowed to set X-Forwarded-For (platform edge
+	// and Docker networks). Direct clients' forwarding headers are ignored.
 	TrustedProxyCIDRs string
 	TrustedProxies    []*net.IPNet
 
@@ -62,7 +61,9 @@ type Config struct {
 
 	MailProvider string
 	MailFrom     string
-	AWSRegion    string
+	SMTPAddr     string
+	SMTPUsername string
+	SMTPPassword string
 
 	JoinCodeTTL        time.Duration
 	LiveSessionIdleTTL time.Duration
@@ -112,8 +113,6 @@ func Load() (*Config, error) {
 	c := &Config{
 		Env:                   getenv("APP_ENV", "development"),
 		Origin:                getenv("APP_ORIGIN", "http://localhost:5173"),
-		Domain:                getenv("APP_DOMAIN", "localhost"),
-		HTTPAddr:              getenv("HTTP_ADDR", ":8080"),
 		LogLevel:              strings.ToLower(getenv("LOG_LEVEL", "info")),
 		LogFormat:             strings.ToLower(getenv("LOG_FORMAT", "json")),
 		SessionCookieName:     getenv("SESSION_COOKIE_NAME", "__Host-qf_session"),
@@ -134,7 +133,9 @@ func Load() (*Config, error) {
 		AIDailyIPLimit:        20,
 		MailProvider:          getenv("MAIL_PROVIDER", "mock"),
 		MailFrom:              getenv("MAIL_FROM", "QuizForge AI <no-reply@example.com>"),
-		AWSRegion:             getenv("AWS_REGION", "ap-southeast-1"),
+		SMTPAddr:              os.Getenv("SMTP_ADDR"),
+		SMTPUsername:          os.Getenv("SMTP_USERNAME"),
+		SMTPPassword:          os.Getenv("SMTP_PASSWORD"),
 		WSAllowedOrigins:      strings.Split(getenv("WS_ALLOWED_ORIGINS", "http://localhost:5173"), ","),
 		WSMaxMessageBytes:     16384,
 		WSOutboundQueue:       64,
@@ -148,6 +149,12 @@ func Load() (*Config, error) {
 		MockMail:              getenv("MOCK_MAIL", "true") == "true",
 	}
 	var err error
+	// Render (and similar platforms) inject PORT; it wins over HTTP_ADDR so
+	// the same image runs unmodified on the platform and locally.
+	c.HTTPAddr = getenv("HTTP_ADDR", ":8080")
+	if port := strings.TrimSpace(os.Getenv("PORT")); port != "" {
+		c.HTTPAddr = ":" + port
+	}
 	if c.ShutdownTimeout, err = getDuration("SHUTDOWN_TIMEOUT", "25s"); err != nil {
 		return nil, err
 	}
@@ -259,6 +266,14 @@ func (c *Config) Validate() error {
 	}
 	if c.DBMaxConns < 1 || c.DBMaxConns > 100 {
 		return fmt.Errorf("DB_MAX_CONNS out of range 1..100: %d", c.DBMaxConns)
+	}
+	switch c.MailProvider {
+	case "mock", "smtp":
+	default:
+		return fmt.Errorf("MAIL_PROVIDER must be mock|smtp, got %q", c.MailProvider)
+	}
+	if c.MailProvider == "smtp" && c.Env != "test" && strings.TrimSpace(c.SMTPAddr) == "" {
+		return errors.New("SMTP_ADDR is required when MAIL_PROVIDER=smtp")
 	}
 	if c.AIMaxInFlight < 1 || c.AIMaxInFlight > 32 {
 		return fmt.Errorf("AI_MAX_IN_FLIGHT out of range: %d", c.AIMaxInFlight)

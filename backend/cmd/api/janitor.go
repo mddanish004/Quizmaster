@@ -14,9 +14,8 @@ import (
 )
 
 // janitorMain runs one bounded retention-cleanup pass and exits.
-// Schedule daily on the single EC2 host:
-//
-//	docker run --rm --env-file /opt/quizforge/.env $ECR/quizforge-api@DIGEST /quizforge janitor
+// Schedule daily as a Render cron job with command `/quizforge janitor`
+// and the same env group as the web service.
 func janitorMain() {
 	cfg, err := config.Load()
 	if err != nil {

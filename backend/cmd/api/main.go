@@ -86,6 +86,7 @@ func run() error {
 		},
 		ExtraRoutes: RegisterRoutes(w, log),
 		RootRoutes:  RegisterWSRoutes(w, log),
+		StaticDir:   os.Getenv("STATIC_DIR"),
 	})
 
 	srv := &http.Server{

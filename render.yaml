@@ -1,0 +1,56 @@
+# Render blueprint: one Docker web service hosts the UI + API on a single
+# origin. Apply with `render blueprint launch` (or `render up`), then fill
+# every `sync: false` value in the Render dashboard before deploying.
+# Deploys run ONLY through .github/workflows/deploy.yml (autoDeploy: false)
+# so database migrations always land before the new image boots.
+services:
+  - type: web
+    name: quizforge
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    autoDeploy: false
+    plan: starter # free sleeps and kills WebSockets; live quizzes need starter+
+    healthCheckPath: /health/ready # DB-gated: no traffic until migrations applied
+    envVars:
+      - key: APP_ENV
+        value: production
+      # Public origin of THIS service (no trailing slash). Must match the
+      # Render-assigned https://<name>.onrender.com URL or your custom domain.
+      - key: APP_ORIGIN
+        value: https://quizforge.onrender.com
+      - key: WS_ALLOWED_ORIGINS
+        value: https://quizforge.onrender.com
+      # Render injects PORT; the binary prefers it over HTTP_ADDR.
+      - key: LOG_LEVEL
+        value: info
+      - key: LOG_FORMAT
+        value: json
+      - key: DATABASE_URL
+        sync: false # Neon pooled URL, ?sslmode=require
+      - key: CSRF_SECRET
+        generateValue: true
+      - key: PASSWORD_PEPPER
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URL
+        value: https://quizforge.onrender.com/api/v1/auth/google/callback
+      - key: AI_PROVIDER
+        value: huggingface
+      - key: HF_TOKEN
+        sync: false
+      - key: HF_MODEL
+        value: Qwen/Qwen3-32B
+      - key: MAIL_PROVIDER
+        value: smtp
+      - key: MAIL_FROM
+        value: QuizForge AI <no-reply@quizforge.example>
+      - key: SMTP_ADDR
+        sync: false # e.g. smtp.example.com:587
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false

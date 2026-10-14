@@ -2,7 +2,7 @@
 
 ## Decision Summary
 
-Build one stateless-at-the-process-boundary Go modular monolith with an in-process WebSocket hub and per-session actor goroutines. PostgreSQL is the durable source of truth; memory accelerates routing and timers but is never the only copy of live state. React is compiled to static assets and served by Caddy. One EC2 instance runs Caddy and the API containers; Neon, Hugging Face, Google, and SES remain managed external dependencies.
+Build one stateless-at-the-process-boundary Go modular monolith with an in-process WebSocket hub and per-session actor goroutines. PostgreSQL is the durable source of truth; memory accelerates routing and timers but is never the only copy of live state. React is compiled to static assets and served by the Go binary from the same image. One Render web service runs UI + API on a single origin; Neon, Hugging Face, Google, and an SMTP relay remain managed external dependencies.
 
 ## Context Diagram
 
@@ -10,9 +10,7 @@ Build one stateless-at-the-process-boundary Go modular monolith with an in-proce
 flowchart TB
   Creator[Creator / Host browser]
   Guest[Participant browser]
-  DNS[Route 53 DNS]
-  Caddy[Caddy: TLS, static UI, reverse proxy]
-  API[Go API modular monolith]
+  Render[Render web service: Go API + static SPA, single origin]
   Auth[Auth module]
   Quiz[Quiz module]
   Live[Live session manager + WebSocket hub]
@@ -20,23 +18,20 @@ flowchart TB
   DB[(Neon PostgreSQL)]
   Google[Google OIDC]
   HF[Hugging Face Inference Providers]
-  SES[AWS SES]
+  SMTP[SMTP relay]
 
-  Creator -->|HTTPS / WSS| DNS --> Caddy
-  Guest -->|HTTPS / WSS| DNS
-  Caddy -->|/api, /ws| API
-  Caddy -->|SPA assets| Creator
-  Caddy -->|SPA assets| Guest
-  API --> Auth
-  API --> Quiz
-  API --> Live
-  API --> AI
+  Creator -->|HTTPS / WSS| Render
+  Guest -->|HTTPS / WSS| Render
+  Render --> Auth
+  Render --> Quiz
+  Render --> Live
+  Render --> AI
   Auth --> DB
   Quiz --> DB
   Live --> DB
   AI --> DB
   Auth --> Google
-  Auth --> SES
+  Auth --> SMTP
   AI --> HF
 ```
 
@@ -44,25 +39,16 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-  Internet --> SG[Security group: 80/443 only]
-  SG --> EC2[EC2 t4g.small, ap-southeast-1]
-  subgraph EC2Host[Docker Compose production]
-    Caddy[Caddy container]
-    Backend[Go API container]
-    Caddy --> Backend
-  end
-  EC2 --> EC2Host
-  Backend -->|TLS pooled runtime| Neon[(Neon Singapore)]
-  Backend -->|HTTPS| HF[HF router]
-  Backend -->|OIDC| Google[Google]
-  Backend -->|HTTPS API| SES[SES]
-  EC2 --> Logs[CloudWatch agent/logs]
-  ECR[ECR] -->|pull immutable digest| EC2
-  GHA[GitHub Actions via OIDC] --> ECR
-  GHA -->|SSM Run Command| EC2
+  Internet --> Render[Render web service: Go API + static SPA]
+  Render -->|TLS pooled runtime| Neon[(Neon)]
+  Render -->|HTTPS| HF[HF router]
+  Render -->|OIDC| Google[Google]
+  Render -->|SMTP| SMTP[Mail relay]
+  GHA[GitHub Actions: migrate, then deploy hook] --> Render
+  GHA -->|migrate| Neon
 ```
 
-No load balancer, NAT Gateway, Redis, or private subnet is required for the MVP. The instance is directly reachable on 80/443 through Caddy, managed through SSM rather than SSH, and uses an IAM instance role. This knowingly accepts a single-instance failure domain in exchange for low cost and comprehensibility.
+No load balancer, NAT gateway, Redis, or container orchestrator is required for the MVP. Render terminates TLS and gates traffic on `/health/ready`; this knowingly accepts a single-instance failure domain in exchange for low cost and comprehensibility.
 
 ## Module Boundaries
 
@@ -79,8 +65,8 @@ Handlers parse transport input and call services. Services enforce authorization
 
 ## Request Lifecycle
 
-1. Caddy terminates TLS, adds request size/time limits, serves `/assets`, and proxies `/api/*` and `/ws/*`.
-2. Go middleware assigns/validates `X-Request-ID`, recovers panics, records structured metrics, checks trusted proxy configuration, applies CORS/origin and rate limits, then authenticates cookies.
+1. Render terminates TLS; the Go binary serves `/assets` (immutable cache), the SPA fallback, `/api/*`, and `/ws/*` from one process.
+2. Go middleware assigns/validates `X-Request-ID`, recovers panics, records structured metrics, checks trusted proxy configuration, applies origin and rate limits, then authenticates cookies.
 3. Handler decodes one JSON object with `DisallowUnknownFields`, validates transport shape, and invokes a domain service.
 4. Service reloads relevant ownership/state, applies business rules, and opens a bounded transaction when mutating.
 5. Repository uses parameterized generated SQL. Service commits before publishing real-time events.
@@ -166,19 +152,19 @@ On `SIGTERM`: mark readiness false; stop accepting new upgrades; cancel provider
 
 ## Configuration
 
-Configuration loads once from environment into a typed struct, validates cross-field invariants, and fails fast. Secrets are never logged. Development may load `.env`; production injects an env file materialized from SSM with mode `0600` immediately before container start. See `.env.example`.
+Configuration loads once from environment into a typed struct, validates cross-field invariants, and fails fast. Secrets are never logged. Development may load `.env`; production injects env from the Render dashboard / env group. See `.env.example`.
 
 ## Observability
 
 - JSON logs: timestamp, level, service, version, request/event ID, route template, method, status, duration, user/session IDs as non-reversible or internal UUIDs, error code. Never content or tokens.
-- Prometheus-compatible `/metrics` bound to loopback or protected network; CloudWatch agent can scrape/export or begin with embedded metrics logs.
+- Prometheus-compatible `/metrics` bound to loopback or protected network; begin with embedded metrics logs and Render's own CPU/memory graphs.
 - Metrics: HTTP latency/errors, DB pool, active sockets/sessions, command latency/conflicts, answer outcome, broadcast drops, AI calls/latency/schema failures, auth outcomes/rate limits.
 - Traces are optional after metrics/logs; OpenTelemetry instrumentation must not block MVP.
 - Liveness proves process/event-loop health. Readiness performs a short DB ping and migration-version check, but not Hugging Face/Google availability.
 
 ## Scaling Path
 
-Vertical scale is first: `t4g.medium`, DB pool tuning, query analysis, and socket limits. For multiple API instances, introduce Redis only with a new ADR: distributed session command ownership/leases, Pub/Sub broadcasts, shared rate limits, and connection presence. PostgreSQL remains the durable state and idempotency authority. An ALB then handles WSS. Do not simply add replicas to the MVP because in-process actors would diverge.
+Vertical scale is first: a larger Render plan, DB pool tuning, query analysis, and socket limits. For multiple API instances, introduce Redis only with a new ADR: distributed session command ownership/leases, Pub/Sub broadcasts, shared rate limits, and connection presence. PostgreSQL remains the durable state and idempotency authority. Do not simply add replicas to the MVP because in-process actors would diverge.
 
 ## Failure Modes
 

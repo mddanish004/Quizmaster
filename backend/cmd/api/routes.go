@@ -25,7 +25,13 @@ func wire(pool *pgxpool.Pool, cfg *config.Config) *wired {
 	if pool == nil {
 		return &wired{}
 	}
-	mail := &auth.MockMailer{}
+	var mail auth.Mailer = &auth.MockMailer{}
+	if !cfg.MockMail && cfg.MailProvider == "smtp" {
+		mail = &auth.SMTPMailer{
+			Addr: cfg.SMTPAddr, Username: cfg.SMTPUsername,
+			Password: cfg.SMTPPassword, From: cfg.MailFrom,
+		}
+	}
 	var verifier auth.OIDCVerifier = auth.FakeOIDCVerifier{}
 	if !cfg.MockOIDC {
 		verifier = &auth.RealOIDCVerifier{

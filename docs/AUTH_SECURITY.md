@@ -36,7 +36,7 @@ Testing status supports at most 100 test users and authorizations expire accordi
 
 SameSite is defense in depth, not the sole control. The server derives a stable per-session CSRF token as `HMAC-SHA-256(CSRF_SECRET, session_id || token_hash)`; `/me` returns it, and all state-changing cookie-authenticated requests require `X-CSRF-Token` verified in constant time plus an exact `Origin` allowlist. The HMAC secret stays in configuration and the token changes when the session rotates. OAuth uses independent state. WebSocket upgrade validates Origin and cookies.
 
-Production CORS is disabled for cross-origin callers because Caddy serves frontend/API on one origin. Local development allowlists one exact Vite origin with credentials; never `*`. Simple public endpoints remain rate limited and do not rely on CORS as authorization.
+Production CORS is disabled for cross-origin callers because the Go binary serves frontend/API on one origin. Local development allowlists one exact Vite origin with credentials; never `*`. Simple public endpoints remain rate limited and do not rely on CORS as authorization.
 
 ## Authorization Matrix
 
@@ -54,7 +54,7 @@ Use queries that include owner/session IDs rather than fetch-then-trust client o
 
 ## Recovery And Email
 
-Password forgot always returns `202`. Generate 32-byte token, store hash, expire in 30 minutes, single use, invalidate older tokens, and send an HTTPS same-origin link through an email interface backed by SES in production. Reset transaction locks/consumes token, changes hash, and revokes all sessions. Rate limit by IP and normalized account key; do not put token in logs/referrer-bearing third-party pages. Set `Referrer-Policy: no-referrer` on recovery routes.
+Password forgot always returns `202`. Generate 32-byte token, store hash, expire in 30 minutes, single use, invalidate older tokens, and send an HTTPS same-origin link through an email interface backed by SMTP in production. Reset transaction locks/consumes token, changes hash, and revokes all sessions. Rate limit by IP and normalized account key; do not put token in logs/referrer-bearing third-party pages. Set `Referrer-Policy: no-referrer` on recovery routes.
 
 Email verification can be required before AI generation/live hosting while still permitting login and editing. Google verified email satisfies verification. In local/test, an explicit mail-capture/mock provider exposes links only to developer tooling; production never logs them.
 
@@ -75,17 +75,18 @@ Email verification can be required before AI generation/live hosting while still
 | Prompt injection | delimit untrusted input, strict schema/domain validation, escaped output | adversarial prompt corpus |
 | API/AI cost abuse | quotas, in-flight limits, body caps, provider budget/circuit | concurrency/quota tests; alerts |
 | Sensitive logging | structured allowlist fields and redaction; no content/token | log capture assertions and secret scan |
-| Secrets in repo/image | SSM/GitHub OIDC, `.env` ignored, image history/Trivy/gitleaks | CI scans and image inspection |
+| Secrets in repo/image | Render env + GitHub secrets, `.env` ignored, image history/Trivy/gitleaks | CI scans and image inspection |
 | Container escape/privilege | non-root, read-only FS where possible, drop caps, no Docker socket | Compose config/Trivy checks |
 | Dependency compromise | lock files, Dependabot/Renovate, govulncheck, npm audit, pinned actions | scheduled CI |
-| DoS/slow clients | Caddy/body/time limits, bounded queues, deadlines, rate limits | k6 and slow-client tests |
+| DoS/slow clients | server read/write timeouts, body limits, bounded queues, deadlines, rate limits | k6 and slow-client tests |
 
 ## Security Headers
 
-Caddy sets, after validating required integrations:
+The Go `SecurityHeaders` middleware sets these (Render edge adds HSTS); the
+header list below is enforced in code, not in a proxy:
 
 ```text
-Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' wss://quiz.example; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com
 Strict-Transport-Security: max-age=31536000; includeSubDomains
 X-Content-Type-Options: nosniff
 Referrer-Policy: strict-origin-when-cross-origin
@@ -106,11 +107,11 @@ Single-instance in-memory token buckets are acceptable for MVP and reset on rest
 - join 20/min/IP, 5/min/code/IP;
 - WS upgrades 10/min/IP; message limits in real-time spec.
 
-Return `429`, `Retry-After`, and generic messages. Behind Caddy, trust forwarded IP only from the known proxy network. Multi-instance scale moves limit state to Redis.
+Return `429`, `Retry-After`, and generic messages. Behind Render, trust forwarded IP only from the known proxy network. Multi-instance scale moves limit state to Redis.
 
 ## Data And Secret Handling
 
-- Secrets: `DATABASE_URL`, migration URL, HF token, Google client secret, session/CSRF keys, SES credentials if not role-based. Production loads from SSM SecureString or instance role.
+- Secrets: `DATABASE_URL`, migration URL, HF token, Google client secret, session/CSRF keys, SMTP credentials. Production loads them from Render env / GitHub Actions secrets.
 - Token hashes use SHA-256 because tokens have 256 bits of entropy; passwords use Argon2id.
 - Minimize PII: creator email; guest display name; coarse IP prefix and hashed agent only for security. No full IP retention beyond short access logs unless justified.
 - Never send participant names to AI. Never expose answer keys in generic event logs.
@@ -118,4 +119,4 @@ Return `429`, `Retry-After`, and generic messages. Behind Caddy, trust forwarded
 
 ## Security Release Gate
 
-Before production: threat-model review; two-user authorization suite; CSRF/origin tests including WebSocket; OAuth test and production redirect audit; dependency/container/secret scans; TLS/header scan; restore drill; abuse load test; verify no debug endpoints; rotate test credentials; AWS budget alerts; document open risks. High-severity known vulnerabilities or failing ownership tests block deployment.
+Before production: threat-model review; two-user authorization suite; CSRF/origin tests including WebSocket; OAuth test and production redirect audit; dependency/container/secret scans; TLS/header scan; restore drill; abuse load test; verify no debug endpoints; rotate test credentials; Render/Neon/HF spend alerts; document open risks. High-severity known vulnerabilities or failing ownership tests block deployment.

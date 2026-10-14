@@ -5,7 +5,7 @@ import (
 )
 
 func TestProductionRefusesInsecureDatabase(t *testing.T) {
-	c := &Config{Env: "production", Origin: "https://quiz.example", LogLevel: "info", DBMaxConns: 10, AIMaxInFlight: 4, CSRFSecret: "0123456789abcdef0123456789abcdef"}
+	c := &Config{Env: "production", Origin: "https://quiz.example", LogLevel: "info", DBMaxConns: 10, AIMaxInFlight: 4, CSRFSecret: "0123456789abcdef0123456789abcdef", MailProvider: "mock"}
 	c.DatabaseURL = "postgresql://u:p@localhost:5432/db?sslmode=disable"
 	if err := c.Validate(); err == nil {
 		t.Fatal("localhost DB accepted in production")
