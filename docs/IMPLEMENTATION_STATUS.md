@@ -296,8 +296,8 @@ Last updated: 2026-10-11 (Stage 3 production-readiness validation).
   - `backend/internal/auth/smtp_mailer.go` (+ tests): message builder +
     envelope parsing unit-tested; wired in `routes.go` when
     `MAIL_PROVIDER=smtp` and not `MOCK_MAIL`.
-  - `render.yaml` blueprint (single service, `autoDeploy: false`,
-    `/health/ready` gate, `starter` plan floor).
+  - `render.yaml` blueprint (single service, `plan: free`, `autoDeploy: false`,
+    `/health/ready` gate).
   - `.github/workflows/deploy.yml` rewritten: migrate (pinned
     `migrate/migrate` image, direct Neon URL, scheme-normalized) → Render
     deploy hook → readiness/version smoke. No AWS credentials anywhere.

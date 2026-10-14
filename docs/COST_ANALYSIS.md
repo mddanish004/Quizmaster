@@ -7,8 +7,8 @@ not quotes.
 
 ## Topology
 
-One Render web service (`starter` or higher — free sleeps and kills
-WebSockets) running the single Docker image, plus managed Neon Postgres.
+One Render web service (**free tier** — no card; `starter` only if you want
+no-sleep) running the single Docker image, plus managed Neon Postgres.
 No EC2/ALB/NAT/Redis/CloudWatch/S3/backup-bucket to operate; Render provides
 TLS, logs, and deploy history. Neon point-in-time restore is the first-line
 backup (verify the plan's window); `deploy/scripts/backup.sh` covers manual
@@ -30,8 +30,8 @@ dumps.
 | Scenario | Render | Neon | Hugging Face | Other | Estimated total |
 |---|---:|---:|---:|---:|---:|
 | Local dev/test | $0 | $0 on eligible free project | $0.10 credit then capped | $0 | $0 unless quotas exceeded |
-| Very low production | ~$7–9 (starter) | $0–5 | $0–5 cap | domain ~$1–2/mo equivalent | **~$8–21** |
-| Moderate portfolio | ~$7–25 (plan + scale) | $5–20 | $5–20 cap | domain | **~$18–67** |
+| Very low production | $0 (free tier, sleeps when idle) | $0–5 | $0–5 cap | domain ~$1–2/mo equivalent | **~$1–12** |
+| Moderate portfolio | $0–7 (free, or starter for no-sleep) | $5–20 | $5–20 cap | domain | **~$6–49** |
 
 SMTP relays (Resend/Postmark/Gmail-class) typically have a free tier covering
 password-reset volumes; budget only if volume outgrows it.

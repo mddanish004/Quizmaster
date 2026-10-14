@@ -10,7 +10,9 @@ services:
     dockerfilePath: ./backend/Dockerfile
     dockerContext: .
     autoDeploy: false
-    plan: starter # free sleeps and kills WebSockets; live quizzes need starter+
+    # Free tier default (no card): sleeps after ~15 min idle, wakes in ~60 s.
+    # Upgrade to `starter` when you need no-sleep (back-to-back live quizzes).
+    plan: free
     healthCheckPath: /health/ready # DB-gated: no traffic until migrations applied
     envVars:
       - key: APP_ENV

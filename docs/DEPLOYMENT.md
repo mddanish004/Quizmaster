@@ -22,10 +22,13 @@ flowchart LR
 |---|---|---|---|
 | local | `vite dev` + `go run`, or `docker compose up --build` | local Postgres / Neon dev branch | mock AI/OIDC/mail by default |
 | CI | GitHub Actions (Go tests, frontend checks, contract) | Postgres 18 service | mocks only |
-| production | one Render web service (`starter` or higher) | Neon production project | Google prod client, capped HF token, SMTP relay |
+| production | one Render web service (free tier; `starter` when no-sleep is needed) | Neon production project | Google prod client, capped HF token, SMTP relay |
 
-Free Render services sleep and kill WebSockets — live quizzes require
-`starter` or higher.
+The free tier sleeps after ~15 min without traffic and wakes in ~60 s on the
+next visit. That is fine for portfolio/demo use: open the URL a minute before
+a live quiz, and the service stays awake while participants interact. Upgrade
+to `starter` (paid, card required) only when back-to-back sessions make the
+wake delay annoying.
 
 ## Release Flow
 
